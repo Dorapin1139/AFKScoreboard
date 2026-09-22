@@ -19,3 +19,23 @@ Please place the .jar file in the Paper plugins folder.
 
 # Disclaimer
 Do not assume any responsibility by use. Please use it at your own risk.
+
+## IntelliJ IDEA でのビルド手順
+
+本プロジェクトはビルドツールに Grable を使用しています。
+IntelliJ IDEA 上で正しくプラグイン（JARファイル）を生成するには、以下の手順を実行してください。
+
+### 🛠️ ビルド手順
+
+1. IntelliJ IDEA の画面右端にある **「Gradle」タブ** をクリックして開きます。
+2. プロジェクト名（AFKScoreboard）を展開し、 **`Tasks`** ツリーを開きます。
+3. リスト内にある **`clean`** をダブルクリックして実行します（古いビルドキャッシュを削除します）。
+4. 続けてリスト内にある **`jar`** をダブルクリックして実行します。
+
+### 📦 生成されたファイルの場所
+ビルドが成功すると、プロジェクトのルート直下に `build/libs` フォルダが作成（または更新）され、その中に中身の詰まった正しい JAR ファイルが生成されます。
+
+* **生成先:** `build/blis/AFKScoreboard-1.0.0jar`
+
+この JAR ファイルを Minecraft サーバーの `plugins` フォルダに配置してください。
+
