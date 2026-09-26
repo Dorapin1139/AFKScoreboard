@@ -1,3 +1,4 @@
+[CLAUDE.md](https://github.com/user-attachments/files/32687712/CLAUDE.md)
 # AFKScoreboard
 
 AxAFKZone の放置ゾーンに滞在しているプレイヤーの連続放置時間を集計し、ランキングをサイドバーのスコアボードに表示する Paper 用プラグイン。
@@ -56,10 +57,12 @@ AxAFKZone の放置ゾーンに滞在しているプレイヤーの連続放置�
 - **回線落ち救済**: ゾーン内でログアウトし、5 分以内に再ログインしてゾーンに入れば時間を引き継ぐ(メモリ上のみ。サーバー再起動や PlugManX での再読み込みで消える)
 - **`/afkhide`**: ランキングへの表示/非表示を切り替える。非表示中は時間をカウントしないが、ゾーン内ではボード自体は表示する。権限なし(全員が使える)
 - **初回案内**: 初めてゾーンに入ったときに `/afkhide` の案内を一度だけ表示する
-- **保存データ**: `config.yml` の `hidden-players`(非表示中)と `welcomed-players`(案内済み)に UUID のリストとして保存する
+- **見た目ボーナス**: ゾーン内にいる秒数だけを 1 秒タスクで数える。30 分でパーティクル(既定 200 tick に 1 回、1〜2 粒)、1 時間で BlockDisplay、3 時間で静かな頭 MOB。世界のブロックは置かない。乗客なので毎 tick のテレポートはしない。抽選は週が変わるまで固定で `cosmetics.yml` に保存する。ゾーン外・ログアウト・死亡・`onDisable` で乗客を remove する。起動時にも、前回残った自前エンティティ(PDC `cosmetic`)をロード済みの範囲から消す。エンダードラゴンは出さない。`PlayerMoveEvent` は増やさない
+- **保存データ**: `config.yml` の `hidden-players`(非表示中)と `welcomed-players`(案内済み)に UUID のリストとして保存する。見た目の秒数と抽選は `cosmetics.yml`
   - 保存のタイミングは変更時(`/afkhide` 実行時、初回案内時)とプラグイン停止時
   - `getConfig()` の更新と YAML 文字列への変換はメインスレッドで行い、ファイルへの書き込みだけを専用スレッド(1 本)で行う。書き込み待ちが残っている間の変更は、最新の内容で 1 回にまとめて書き込む
   - プラグイン停止時は、書き込み待ちが終わるまで最大 10 秒待つ
+  - `cosmetics.yml` も同じ形で、別スレッド `AFKScoreboard-Cosmetic` に書く。`onDisable` ではその前にパーティクル以外の見た目エンティティを消す
 
 ## 過去にハマった点
 
@@ -69,6 +72,9 @@ AxAFKZone の放置ゾーンに滞在しているプレイヤーの連続放置�
 
 ## ファイル構成(src/main/java/space/gorogoro/afkscoreboard/)
 
-- `AFKScoreboard.java` — メインクラス。ゾーン読み込み、スコアボード、イベント、`/afkhide` コマンド、データ保存をすべて持つ(ゾーン範囲は内部クラス `ZoneArea`)
+- `AFKScoreboard.java` — メインクラス。ゾーン読み込み、スコアボード、イベント、`/afkhide` コマンド、データ保存を持つ(ゾーン範囲は内部クラス `ZoneArea`)
+- `CosmeticService.java` — ゾーン内の見た目。停止時の後始末もここ
+- `CosmeticStore.java` — 見た目用の今週の秒数と抽選、`cosmetics.yml` の非同期保存
+- `CosmeticKinds.java` — パーティクル、ブロック、頭 MOB の種類
 - `src/main/resources/plugin.yml` — プラグイン定義、コマンド定義
 - `src/main/resources/config.yml` — 保存データ(`welcomed-players`、`hidden-players`)
