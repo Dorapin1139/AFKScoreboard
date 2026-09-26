@@ -33,7 +33,7 @@ AxAFKZone の放置ゾーンに滞在しているプレイヤーの連続放置�
 ### TPS に影響させない
 - 高頻度イベント(BlockFromToEvent、EntityChangeBlockEvent、PlayerInteractEvent、PlayerMoveEvent など)は、安い判定(ワールドや座標の整数比較など)を先に行い、対象外なら即座に抜ける
 - BlockPhysicsEvent、VehicleMoveEvent など発生頻度が極端に高いイベントは使わない
-- メインスレッドでファイルや DB の同期 I/O をしない。未読み込みチャンクを判定のために読み込まない(`getChunkAtAsync`、`teleportAsync` を使う)
+- メインスレッドでファイルや DB の同期 I/O をしない(ただし、起動時・リロード時に一度だけ行う小さなファイルの読み込みは除く)。未読み込みチャンクを判定のために読み込まない(`getChunkAtAsync`、`teleportAsync` を使う)
 - config.yml は起動時・リロード時に一度だけ解析して保持する。Material などの集合は EnumSet
 - 定期タスクは最小限にし、追加するときは頻度と理由を設計案に書く
 
