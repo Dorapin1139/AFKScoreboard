@@ -60,6 +60,11 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
     // 救済猶予時間（5分 = 300,000ミリ秒）
     private static final long RECOVERY_GRACE_PERIOD_MS = 5 * 60 * 1000L;
 
+    // 今週の累計秒数（data.yml）。ボードに出すのは、今ゾーンにいる人だけ
+    private WeeklyStore weeklyStore;
+    // 週次リセットの確認は 60 秒に 1 回
+    private int weeklyCheckClock;
+
     // config.yml の書き込み専用スレッド（1本なので書き込みは必ず順番に行われる）
     private final ExecutorService saveExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "AFKScoreboard-Save"));
     // 書き込み待ちの config.yml の内容（null なら書き込み待ちなし）
@@ -71,6 +76,8 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         saveDefaultConfig();
         loadWelcomedPlayers();
         loadHiddenPlayers();
+        this.weeklyStore = new WeeklyStore(this);
+        this.weeklyStore.load();
 
         // スコアボードの初期化
         ScoreboardManager manager = Bukkit.getScoreboardManager();
@@ -97,6 +104,9 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         // 滞在時間のカウントタスク（1秒ごと = 20ティックス）
         Bukkit.getScheduler().runTaskTimer(this, this::incrementTimeEverySecond, 0L, 20L);
 
+        // 週間累計の保存（60秒ごと）。書き込み自体は専用スレッド
+        Bukkit.getScheduler().runTaskTimer(this, this.weeklyStore::requestSave, 1200L, 1200L);
+
         // プラグイン起動時に、既にエリア内にいるプレイヤーを検知してカウントを開始する
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID uuid = player.getUniqueId();
@@ -112,6 +122,10 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        if (weeklyStore != null) {
+            weeklyStore.shutdown();
+        }
+
         // サーバー終了時、既読プレイヤーデータをconfig.ymlに確実に保存
         saveWelcomedPlayers();
         saveHiddenPlayers();
@@ -342,18 +356,28 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
             afkScoreboard.resetScores(entry);
         }
 
-        // 現在放置中の上位10人を取得
-        List<Map.Entry<UUID, Integer>> sortedTop10 = currentSessionTimes.entrySet().stream()
-                .sorted(Map.Entry.<UUID, Integer>comparingByValue().reversed())
-                .limit(10)
-                .toList();
+        // 今ゾーンにいて、ランキング表示がオンの人を、今週の累計で並べる
+        List<Map.Entry<UUID, Integer>> sortedTop10 = new ArrayList<>();
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (hiddenPlayers.contains(online.getUniqueId())) {
+                continue;
+            }
+            if (!isPlayerInAnyZone(online.getLocation())) {
+                continue;
+            }
+            sortedTop10.add(Map.entry(online.getUniqueId(), weeklyStore.getSeconds(online.getUniqueId())));
+        }
+        sortedTop10.sort(Map.Entry.<UUID, Integer>comparingByValue().reversed());
+        if (sortedTop10.size() > 10) {
+            sortedTop10 = sortedTop10.subList(0, 10);
+        }
 
         // 初期値の動的計算: ヘッダー2行 ＋ ランクインしている人数
         // 誰もおらず「誰も放置していません」の1行を表示する場合は「2行 + 1行 = 3」になります
         int scoreValue = 2 + (sortedTop10.isEmpty() ? 1 : sortedTop10.size());
 
         // ヘッダー部分の設定
-        afkObjective.getScore("§7位 プレイヤー §b連続放置時間").setScore(scoreValue--);
+        afkObjective.getScore("§7位 プレイヤー §b今週の放置").setScore(scoreValue--);
         afkObjective.getScore("§8----------------------").setScore(scoreValue--);
 
         if (sortedTop10.isEmpty()) {
@@ -371,6 +395,9 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
             }
 
             String playerName = player.getName();
+            if (playerName.length() > 12) {
+                playerName = playerName.substring(0, 12);
+            }
             int sessionSeconds = entry.getValue();
 
             String currentStr = formatTimeCompact(sessionSeconds);
@@ -385,8 +412,24 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
      * 1秒ごとに、ゾーンにいるプレイヤーの時間（連続）を加算
      */
     private void incrementTimeEverySecond() {
+        if (++weeklyCheckClock >= 60) {
+            weeklyCheckClock = 0;
+            if (weeklyStore.rolloverIfNeeded()) {
+                for (Player online : Bukkit.getOnlinePlayers()) {
+                    if (isPlayerInAnyZone(online.getLocation())) {
+                        online.sendMessage("§e今週の放置ランキングがリセットされました");
+                    }
+                }
+            }
+        }
+
         for (Player player : Bukkit.getOnlinePlayers()) {
-            // afkhide ユーザーは累積カウント処理のみをスキップ（ボードの有無とは分離）
+            // 週間累計は非表示中も残す。ボードに出すかどうかとは分ける
+            if (isPlayerInAnyZone(player.getLocation())) {
+                weeklyStore.addSecond(player.getUniqueId());
+            }
+
+            // afkhide ユーザーは連続放置のカウントだけをスキップ（ボードの有無とは分離）
             if (hiddenPlayers.contains(player.getUniqueId())) {
                 continue;
             }
@@ -532,6 +575,9 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         }
 
         public boolean isInArea(Location loc) {
+            if (loc.getWorld() == null) {
+                return false;
+            }
             return loc.getWorld().getName().equalsIgnoreCase(world) &&
                     loc.getX() >= minX && loc.getX() <= maxX &&
                     loc.getY() >= minY && loc.getY() <= maxY &&
