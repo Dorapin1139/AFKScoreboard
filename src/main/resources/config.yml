@@ -1,2 +1,6 @@
+# 週の区切り。このタイムゾーンの week-start-day 00:00 に週間累計をリセットする。
+timezone: Asia/Tokyo
+week-start-day: MONDAY
+
 welcomed-players: []
 hidden-players: []
