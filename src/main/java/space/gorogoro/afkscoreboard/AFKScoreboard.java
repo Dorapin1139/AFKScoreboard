@@ -25,7 +25,14 @@ import io.papermc.paper.scoreboard.numbers.NumberFormat;
 import org.jspecify.annotations.NonNull;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 public class AFKScoreboard extends JavaPlugin implements Listener {
@@ -52,6 +59,11 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
 
     // 救済猶予時間（5分 = 300,000ミリ秒）
     private static final long RECOVERY_GRACE_PERIOD_MS = 5 * 60 * 1000L;
+
+    // config.yml の書き込み専用スレッド（1本なので書き込みは必ず順番に行われる）
+    private final ExecutorService saveExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "AFKScoreboard-Save"));
+    // 書き込み待ちの config.yml の内容（null なら書き込み待ちなし）
+    private final AtomicReference<String> pendingConfigYaml = new AtomicReference<>();
 
     @Override
     public void onEnable() {
@@ -103,7 +115,46 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         // サーバー終了時、既読プレイヤーデータをconfig.ymlに確実に保存
         saveWelcomedPlayers();
         saveHiddenPlayers();
+
+        // PlugManX などでアンロードされたとき、更新されないランキングボードが残らないようメインボードに戻す
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (player.getScoreboard().equals(afkScoreboard)) {
+                player.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
+            }
+        }
+
+        // 書き込み待ちがすべて終わるまで待つ（サーバー終了時のみ、メインスレッドで待機する）
+        saveExecutor.shutdown();
+        try {
+            if (!saveExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                getLogger().severe("config.yml の書き込みが時間内に終わりませんでした。");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
         getLogger().info("The Plugin Has Been Disabled!");
+    }
+
+    /**
+     * 現在の config.yml の内容を専用スレッドで書き込む
+     * getConfig() へのアクセスはメインスレッドで行い、ファイルの書き込みだけを専用スレッドに任せる
+     * 書き込み待ちが残っている間に呼ばれた場合は、最新の内容で 1 回にまとめて書き込む
+     */
+    private void requestSaveConfig() {
+        String yaml = getConfig().saveToString();
+        if (pendingConfigYaml.getAndSet(yaml) != null) {
+            // すでに書き込み待ちがあるので、その書き込みで最新の内容が使われる
+            return;
+        }
+        File configFile = new File(getDataFolder(), "config.yml");
+        saveExecutor.execute(() -> {
+            String latestYaml = pendingConfigYaml.getAndSet(null);
+            try {
+                Files.writeString(configFile.toPath(), latestYaml, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                getLogger().severe("config.yml の書き込みに失敗しました: " + e.getMessage());
+            }
+        });
     }
 
     /**
@@ -127,7 +178,7 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
                 .map(UUID::toString)
                 .collect(Collectors.toList());
         getConfig().set("welcomed-players", uuidStrings);
-        saveConfig();
+        requestSaveConfig();
     }
 
     /**
@@ -151,7 +202,7 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
                 .map(UUID::toString)
                 .collect(Collectors.toList());
         getConfig().set("hidden-players", uuidStrings);
-        saveConfig();
+        requestSaveConfig();
     }
 
     /**
@@ -175,7 +226,7 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
                 // 非表示（除外）リストから削除 ＝ 通常モードに戻す
                 hiddenPlayers.remove(uuid);
 
-                // 即座にメインスレッドで config.yml へ保存する
+                // config.yml へ保存する（書き込みは専用スレッドで行う）
                 saveHiddenPlayers();
 
                 player.sendMessage("§f放置ランキングにあなたを§a表示§fするようにしました");
@@ -189,7 +240,7 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
                 // 非表示（除外）リストに追加 ＝ 除外モードにする
                 hiddenPlayers.add(uuid);
 
-                // 即座にメインスレッドで config.yml へ保存する
+                // config.yml へ保存する（書き込みは専用スレッドで行う）
                 saveHiddenPlayers();
 
                 // 自身のカウントデータを破棄（ランキングから消す）
@@ -375,8 +426,8 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
                 welcomedPlayers.add(uuid);
                 // メッセージを送信
                 player.sendMessage("§b/afkhide §fで放置ランキングから自分を表示/非表示できます");
-                // 既読情報を即座に config.yml へ非同期保存（安全対策）
-                Bukkit.getScheduler().runTaskAsynchronously(this, this::saveWelcomedPlayers);
+                // 既読情報を config.yml へ保存（書き込みは専用スレッドで行う）
+                saveWelcomedPlayers();
             }
 
             // カウント用マップへの新規登録処理（通常モードのプレイヤーのみ）
