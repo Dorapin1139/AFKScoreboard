@@ -1,7 +1,7 @@
 # AFKScoreboard
 
 AxAFKZone の放置ゾーンに滞在しているプレイヤーの連続放置時間を集計し、ランキングをサイドバーのスコアボードに表示する Paper 用プラグイン。
-リポジトリ: https://github.com/gorogoro-space/AFKScoreboard(ライセンス: LGPL v3)
+リポジトリ: <https://github.com/gorogoro-space/AFKScoreboard>(ライセンス: LGPL v3)
 
 ## 作業の進め方(必ず守ること)
 
