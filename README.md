@@ -43,7 +43,7 @@ Do not assume any responsibility by use. Please use it at your own risk.
 
 ## IntelliJ IDEA でのビルド手順
 
-本プロジェクトはビルドツールに Grable を使用しています。
+本プロジェクトはビルドツールに Gradle を使用しています。
 IntelliJ IDEA 上で正しくプラグイン（JARファイル）を生成するには、以下の手順を実行してください。
 
 ### 🛠️ ビルド手順
@@ -56,7 +56,7 @@ IntelliJ IDEA 上で正しくプラグイン（JARファイル）を生成する
 ### 📦 生成されたファイルの場所
 ビルドが成功すると、プロジェクトのルート直下に `build/libs` フォルダが作成（または更新）され、その中に中身の詰まった正しい JAR ファイルが生成されます。
 
-* **生成先:** `build/blis/AFKScoreboard-1.0.0jar`
+* **生成先:** `build/libs/AFKScoreboard-1.0.0.jar`
 
 この JAR ファイルを Minecraft サーバーの `plugins` フォルダに配置してください。
 
