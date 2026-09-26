@@ -12,6 +12,7 @@ AxAFKZone の放置ゾーンに滞在しているプレイヤーの連続放置�
 - 作業後は、変更・追加・削除したファイルの一覧と変更内容を報告する。
 - 仕様を変えたら README.md と CLAUDE.md も合わせて更新する。
 - `git push` の前には必ず確認を取る。コミットは意味のある単位で分ける。
+- リポジトリへの初回の `git push` の前には、「GitHub で Watch 設定(Custom → Issues と Pull requests)はしましたか?」と日本語で確認する。自動 Watch は廃止されており、設定しないと issue や PR の通知が届かない。
 - コミットメッセージや PR に `Co-Authored-By: Claude` などの署名を付けない。`.claude/` は Git に入れない(`.git/info/exclude` で除外する)。
 - 実装中に設計の抜けや穴に気づいたら、黙って対処せず報告して相談する。
 
