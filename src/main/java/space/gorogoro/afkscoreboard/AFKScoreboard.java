@@ -60,6 +60,9 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
     // 救済猶予時間（5分 = 300,000ミリ秒）
     private static final long RECOVERY_GRACE_PERIOD_MS = 5 * 60 * 1000L;
 
+    // ゾーン内だけの見た目。停止時に乗客を消す
+    private CosmeticService cosmetics;
+
     // config.yml の書き込み専用スレッド（1本なので書き込みは必ず順番に行われる）
     private final ExecutorService saveExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "AFKScoreboard-Save"));
     // 書き込み待ちの config.yml の内容（null なら書き込み待ちなし）
@@ -97,6 +100,18 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         // 滞在時間のカウントタスク（1秒ごと = 20ティックス）
         Bukkit.getScheduler().runTaskTimer(this, this::incrementTimeEverySecond, 0L, 20L);
 
+        // 見た目は別タスク。パーティクルは既定 10 秒、追従チェックは 1 秒。乗客なので座標の毎 tick 更新はしない
+        this.cosmetics = new CosmeticService(this);
+        this.cosmetics.load();
+        this.cosmetics.removeStrayEntities();
+        long particleInterval = getConfig().getLong("particle-interval-ticks");
+        if (particleInterval < 20L) {
+            particleInterval = 200L;
+        }
+        Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::tickParticles, particleInterval, particleInterval);
+        Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::maintain, 20L, 20L);
+        Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::requestSave, 1200L, 1200L);
+
         // プラグイン起動時に、既にエリア内にいるプレイヤーを検知してカウントを開始する
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID uuid = player.getUniqueId();
@@ -108,10 +123,16 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         }
 
         getServer().getPluginManager().registerEvents(this, this);
+        getServer().getPluginManager().registerEvents(this.cosmetics, this);
     }
 
     @Override
     public void onDisable() {
+        // PlugManX の再読み込みでも、頭上のブロックと MOB を残さない
+        if (cosmetics != null) {
+            cosmetics.shutdown();
+        }
+
         // サーバー終了時、既読プレイヤーデータをconfig.ymlに確実に保存
         saveWelcomedPlayers();
         saveHiddenPlayers();
@@ -265,7 +286,7 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
     /**
      * 指定されたロケーションがいずれかの放置ゾーン内にあるかを判定するヘルパー
      */
-    private boolean isPlayerInAnyZone(Location loc) {
+    boolean isPlayerInAnyZone(Location loc) {
         for (ZoneArea zone : loadedZones.values()) {
             if (zone.isInArea(loc)) {
                 return true;
@@ -532,6 +553,9 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         }
 
         public boolean isInArea(Location loc) {
+            if (loc.getWorld() == null) {
+                return false;
+            }
             return loc.getWorld().getName().equalsIgnoreCase(world) &&
                     loc.getX() >= minX && loc.getX() <= maxX &&
                     loc.getY() >= minY && loc.getY() <= maxY &&
