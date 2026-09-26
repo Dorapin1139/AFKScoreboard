@@ -1,3 +1,4 @@
+[README.md](https://github.com/user-attachments/files/32687704/README.md)
 # AFKScoreboard
 [![Paper 1.21.11](https://img.shields.io/badge/Paper-1.21.11-brightgreen.svg)](https://fill-ui.papermc.io/projects/paper/version/1.21.11)
 [![GitHub release](https://img.shields.io/github/release/gorogoro-space/AFKScoreboard.svg)](https://github.com/gorogoro-space/AFKScoreboard/releases)
@@ -25,6 +26,12 @@ Please place the .jar file in the Paper plugins folder.
 - ランキングは 5 秒ごとに更新され、上位 10 人を表示します
 - ゾーン内でログアウトしても、5 分以内に再ログインしてゾーンに入れば放置時間を引き継ぎます(サーバー再起動やプラグインの再読み込みで消えます)
 - 初めてゾーンに入ったときに `/afkhide` の案内を一度だけ表示します
+- ゾーン内にいる時間に応じて、見た目を足します。ゾーンの外、ログアウト、プラグインの停止では消します
+  - 30 分: パーティクル 1 種（煙 / 胞子 / 桜 / 蛍 / 雪）。既定は 10 秒に 1 回、粒は少なめ
+  - 1 時間: 頭の上にブロックの見た目（苔 / クモの巣 / ツツジ / 花びら / 落ち葉）。世界のブロックは置きません
+  - 3 時間: 頭に静かな MOB（猫 / 蛙 / フグ / 鶏 / 兎 / 狐 / 蜂 / オウム / 子牛 / 子シロクマ / 村人の子供）
+- 何が出るかは、その週のあいだ固定です。月曜 00:00（Asia/Tokyo。`timezone` と `week-start-day` があればそれに従う）で戻ります
+- エンダードラゴンは入れていません
 
 # Usage
 ```
@@ -37,6 +44,8 @@ Please place the .jar file in the Paper plugins folder.
 `plugins/AFKScoreboard/config.yml` に以下を保存します。
 - `hidden-players` — ランキングを非表示にしているプレイヤーの UUID
 - `welcomed-players` — `/afkhide` の案内を表示済みのプレイヤーの UUID
+
+`plugins/AFKScoreboard/cosmetics.yml` に、見た目用の今週の秒数と抽選結果を保存します。書き込みは専用スレッドで、抽選が決まったとき、60 秒ごと、停止時にまとめます。
 
 # Disclaimer
 Do not assume any responsibility by use. Please use it at your own risk.
