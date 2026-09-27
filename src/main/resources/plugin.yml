@@ -10,3 +10,16 @@ website: https://www.gorogoro.space/
 commands:
   afkhide:
     description: 放置ランキングから自分を表示/非表示できます
+  afkdebug:
+    description: 見た目ボーナスを待たずに付与する（管理者用）
+    usage: /afkdebug <particle|block|mount|all>
+    permission: afkscoreboard.debug
+    permission-message: §cこのコマンドは管理者だけが使えます。
+  afklook:
+    description: 見た目ボーナスを種類ごとに表示/非表示にします
+    usage: /afklook <particle|block|mount|all|reset>
+
+permissions:
+  afkscoreboard.debug:
+    description: 見た目ボーナスを待たずに付与する
+    default: op
