@@ -1,4 +1,3 @@
-[CLAUDE.md](https://github.com/user-attachments/files/32687712/CLAUDE.md)
 # AFKScoreboard
 
 AxAFKZone の放置ゾーンに滞在しているプレイヤーの連続放置時間を集計し、ランキングをサイドバーのスコアボードに表示する Paper 用プラグイン。
@@ -78,3 +77,4 @@ AxAFKZone の放置ゾーンに滞在しているプレイヤーの連続放置�
 - `CosmeticKinds.java` — パーティクル、ブロック、頭 MOB の種類
 - `src/main/resources/plugin.yml` — プラグイン定義、コマンド定義
 - `src/main/resources/config.yml` — 保存データ(`welcomed-players`、`hidden-players`)
+
