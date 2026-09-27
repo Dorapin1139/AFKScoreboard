@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/32687704/README.md)
 # AFKScoreboard
 [![Paper 1.21.11](https://img.shields.io/badge/Paper-1.21.11-brightgreen.svg)](https://fill-ui.papermc.io/projects/paper/version/1.21.11)
 [![GitHub release](https://img.shields.io/github/release/gorogoro-space/AFKScoreboard.svg)](https://github.com/gorogoro-space/AFKScoreboard/releases)
@@ -68,4 +67,5 @@ IntelliJ IDEA 上で正しくプラグイン（JARファイル）を生成する
 * **生成先:** `build/libs/AFKScoreboard-1.0.0.jar`
 
 この JAR ファイルを Minecraft サーバーの `plugins` フォルダに配置してください。
+
 
