@@ -77,6 +77,7 @@ AxAFKZone の放置ゾーンにいるプレイヤーを、今週の累計でサ�
 - `config.getString(path, "")` のように既定値を渡すと、jar 内 config.yml の既定値が参照されない。既定値なしで取得して null を判定すること
 - plugin.yml で `default: true` にした権限でも、登録されないと Bukkit は「OP のみ」として扱う。全員向けの機能を権限で縛らない
 - IntelliJ の「アーティファクトのビルド」はクラスファイルが入らないことがある。必ず Gradle でビルドする
+- 乗客を `remove()` すると内部で降車イベント(`EntityDismountEvent`)が出る。これをキャンセルすると、消えた乗客が乗ったまま残り、サーバーが毎 tick 降ろそうとして重くなる(1.1.0 で発生)。自分で消すときは `allowDismount` を true にし、remove 済み(`!isValid()`)の乗客の降車はキャンセルしない
 
 ## ファイル構成(src/main/java/space/gorogoro/afkscoreboard/)
 
