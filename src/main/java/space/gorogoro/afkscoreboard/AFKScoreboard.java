@@ -5,6 +5,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -60,6 +61,9 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
     // 救済猶予時間（5分 = 300,000ミリ秒）
     private static final long RECOVERY_GRACE_PERIOD_MS = 5 * 60 * 1000L;
 
+    // ゾーン内だけの見た目。停止時に乗客を消す
+    private CosmeticService cosmetics;
+
     // config.yml の書き込み専用スレッド（1本なので書き込みは必ず順番に行われる）
     private final ExecutorService saveExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "AFKScoreboard-Save"));
     // 書き込み待ちの config.yml の内容（null なら書き込み待ちなし）
@@ -97,6 +101,23 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         // 滞在時間のカウントタスク（1秒ごと = 20ティックス）
         Bukkit.getScheduler().runTaskTimer(this, this::incrementTimeEverySecond, 0L, 20L);
 
+        // 見た目は別タスク。パーティクルは既定 10 秒、追従チェックは 1 秒。乗客なので座標の毎 tick 更新はしない
+        this.cosmetics = new CosmeticService(this);
+        this.cosmetics.load();
+        this.cosmetics.removeStrayEntities();
+        long particleInterval = getConfig().getLong("particle-interval-ticks");
+        if (particleInterval < 20L) {
+            particleInterval = 200L;
+        }
+        Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::tickParticles, particleInterval, particleInterval);
+        Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::maintain, 20L, 20L);
+        // 頭 MOB の向きと、座席中の見た目ブロック。止まっているあいだは座標を送らない
+        Bukkit.getScheduler().runTaskTimer(this, () -> {
+            this.cosmetics.tickMountFacing();
+            this.cosmetics.tickSeatedBlocks();
+        }, 1L, 1L);
+        Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::requestSave, 1200L, 1200L);
+
         // プラグイン起動時に、既にエリア内にいるプレイヤーを検知してカウントを開始する
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID uuid = player.getUniqueId();
@@ -107,11 +128,22 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
             }
         }
 
+        PluginCommand debugCommand = getCommand("afkdebug");
+        if (debugCommand != null) {
+            debugCommand.setTabCompleter(this);
+        }
+
         getServer().getPluginManager().registerEvents(this, this);
+        getServer().getPluginManager().registerEvents(this.cosmetics, this);
     }
 
     @Override
     public void onDisable() {
+        // PlugManX の再読み込みでも、頭上のブロックと MOB を残さない
+        if (cosmetics != null) {
+            cosmetics.shutdown();
+        }
+
         // サーバー終了時、既読プレイヤーデータをconfig.ymlに確実に保存
         saveWelcomedPlayers();
         saveHiddenPlayers();
@@ -259,13 +291,90 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
             }
             return true;
         }
+
+        if (command.getName().equalsIgnoreCase("afkdebug")) {
+            return handleDebugCommand(player, args);
+        }
         return false;
+    }
+
+    /**
+     * 見た目ボーナスを待たずに付与する。OP のみ。放置秒数は変えない。
+     */
+    private boolean handleDebugCommand(Player player, String[] args) {
+        if (cosmetics == null) {
+            player.sendMessage("§c見た目ボーナスはまだ準備できていません。");
+            return true;
+        }
+        if (args.length != 1) {
+            sendDebugUsage(player);
+            return true;
+        }
+        String arg = args[0].toLowerCase(Locale.ROOT);
+        switch (arg) {
+            case "particle", "30m", "30" -> sendDebugGrant(player, cosmetics.debugGrant(player, true, false, false));
+            case "block", "1h", "60" -> sendDebugGrant(player, cosmetics.debugGrant(player, false, true, false));
+            case "mount", "3h", "180" -> sendDebugGrant(player, cosmetics.debugGrant(player, false, false, true));
+            case "all" -> sendDebugGrant(player, cosmetics.debugGrant(player, true, true, true));
+            case "reset", "clear", "off" -> {
+                if (cosmetics.debugClear(player)) {
+                    player.sendMessage("§fデバッグで付与した見た目を外しました。§7放置の秒数はそのままです。");
+                } else {
+                    player.sendMessage("§7付与されている見た目はありません。");
+                }
+            }
+            default -> sendDebugUsage(player);
+        }
+        return true;
+    }
+
+    private void sendDebugGrant(Player player, CosmeticService.DebugGrant grant) {
+        sendDebugLine(player, "30分（パーティクル）", grant.particle, grant.particleNew);
+        sendDebugLine(player, "1時間（ブロック）", grant.block, grant.blockNew);
+        sendDebugLine(player, "3時間（頭MOB）", grant.mount, grant.mountNew);
+        if (grant.inZone) {
+            player.sendMessage("§7ゾーン内なので、この場に表示しました。");
+        } else {
+            player.sendMessage("§7今はゾーン外です。放置ゾーンに入ると表示されます。");
+        }
+    }
+
+    private void sendDebugLine(Player player, String label, String kind, boolean fresh) {
+        if (kind == null) {
+            return;
+        }
+        if (fresh) {
+            player.sendMessage("§f" + label + "を付与しました: §a" + kind);
+        } else {
+            player.sendMessage("§f" + label + "は付与済みです: §a" + kind);
+        }
+    }
+
+    private void sendDebugUsage(Player player) {
+        player.sendMessage("§f/afkdebug <particle|block|mount|all|reset>");
+        player.sendMessage("§7particle §f30分のパーティクル  §7block §f1時間のブロック  §7mount §f3時間の頭MOB");
+        player.sendMessage("§7all §f3つまとめて  §7reset §f付与を外す（放置秒数は残します）");
+    }
+
+    @Override
+    public List<String> onTabComplete(@NonNull CommandSender sender, @NonNull Command command, @NonNull String alias, String @NonNull [] args) {
+        if (!command.getName().equalsIgnoreCase("afkdebug") || args.length != 1) {
+            return List.of();
+        }
+        String prefix = args[0].toLowerCase(Locale.ROOT);
+        List<String> matches = new ArrayList<>();
+        for (String option : List.of("particle", "block", "mount", "all", "reset")) {
+            if (option.startsWith(prefix)) {
+                matches.add(option);
+            }
+        }
+        return matches;
     }
 
     /**
      * 指定されたロケーションがいずれかの放置ゾーン内にあるかを判定するヘルパー
      */
-    private boolean isPlayerInAnyZone(Location loc) {
+    boolean isPlayerInAnyZone(Location loc) {
         for (ZoneArea zone : loadedZones.values()) {
             if (zone.isInArea(loc)) {
                 return true;
@@ -532,6 +641,9 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         }
 
         public boolean isInArea(Location loc) {
+            if (loc.getWorld() == null) {
+                return false;
+            }
             return loc.getWorld().getName().equalsIgnoreCase(world) &&
                     loc.getX() >= minX && loc.getX() <= maxX &&
                     loc.getY() >= minY && loc.getY() <= maxY &&
