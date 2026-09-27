@@ -1,6 +1,6 @@
 # AFKScoreboard
 
-AxAFKZone の放置ゾーンに滞在しているプレイヤーの連続放置時間を集計し、ランキングをサイドバーのスコアボードに表示する Paper 用プラグイン。
+AxAFKZone の放置ゾーンにいるプレイヤーを、今週の累計でサイドバーに並べる Paper 用プラグイン。連続放置時間はメモリ上で別途数える。
 リポジトリ: <https://github.com/gorogoro-space/AFKScoreboard>(ライセンス: LGPL v3)
 
 ## 作業の進め方(必ず守ること)
@@ -58,14 +58,19 @@ AxAFKZone の放置ゾーンに滞在しているプレイヤーの連続放置�
 - **ゾーンの読み込み**: 起動時に AxAFKZone の `zones/*.yml` から `zone.location1` / `zone.location2` を読み取り、直方体の範囲(各辺 ±0.5 拡張)として保持する。AxAFKZone は softdepend
 - **ボードの表示**: ゾーン内にいるプレイヤーにサイドバー「放置時間ランキング」を表示し、ゾーン外に出たらメインスコアボードに戻す。出入りの判定は PlayerMoveEvent(ブロックの X/Z が変わったときのみ)、ログイン時、プラグイン起動時に行う
 - **連続放置時間**: ゾーン内のプレイヤーを 1 秒ごと(20 tick のタスク)に +1 秒する。ゾーン外に出るとリセット
-- **ランキング**: 5 秒ごと(100 tick のタスク)に上位 10 人を表示する。右側の数字は非表示
+- **ランキング**: 5 秒ごと(100 tick のタスク)に、今ゾーンにいる人を今週の累計で上位 10 人まで表示する。右側の数字は非表示
+- **週間累計**: ゾーン内の秒数を 1 秒タスクで `data.yml` に足す。`/afkhide` 中も続く。ゾーンを出ても、ログアウトしても、再起動しても残る。週の区切りは `timezone`(既定 Asia/Tokyo)の `week-start-day`(既定 MONDAY)00:00。保存は 60 秒ごとと停止時に、専用スレッド `AFKScoreboard-Weekly`
 - **回線落ち救済**: ゾーン内でログアウトし、5 分以内に再ログインしてゾーンに入れば時間を引き継ぐ(メモリ上のみ。サーバー再起動や PlugManX での再読み込みで消える)
-- **`/afkhide`**: ランキングへの表示/非表示を切り替える。非表示中は時間をカウントしないが、ゾーン内ではボード自体は表示する。権限なし(全員が使える)
+- **`/afkhide`**: ランキングへの表示/非表示を切り替える。非表示中は連続放置をカウントしない。週間累計は続く。ゾーン内ではボード自体は表示する。見た目ボーナスは付けない(切り替えた時点で外す・付け直す。見た目用の今週の秒数は数え続ける)。権限なし(全員が使える)
+- **`/afkdebug`**: OP 専用（`afkscoreboard.debug`、plugin.yml のコマンドに permission を付ける）。`particle`（30分）/ `block`（1時間）/ `mount`（3時間）/ `all`。未抽選の枠だけその場で決め、放置秒数は増やさない。ゾーン内なら即表示し、ゾーン外なら入域時に出す
+- **`/afklook`**: 権限なし(全員が使える)。`particle` / `block` / `mount` / `all` で見た目を種類ごとに表示/非表示に切り替える(`all` は 1 つでも表示中なら全部 OFF、全部 OFF なら全部 ON)。OFF の種類は抽選結果と秒数を残したまま付けない(引き直しにならない)。`cosmetics.yml` の `look-off` に保存し、週のリセットでは消さない。`reset` は見た目の抽選結果をすべて外し秒数は残すので、条件を満たしている枠は 1 秒後に引き直される(引き直しとして許容)
 - **初回案内**: 初めてゾーンに入ったときに `/afkhide` の案内を一度だけ表示する
-- **保存データ**: `config.yml` の `hidden-players`(非表示中)と `welcomed-players`(案内済み)に UUID のリストとして保存する
+- **見た目ボーナス**: ゾーン内にいる秒数だけを 1 秒タスクで数える。30 分でパーティクル(既定 200 tick に 1 回、1〜2 粒)、1 時間で BlockDisplay、3 時間で静かな頭 MOB。世界のブロックは置かない。乗客なので毎 tick のテレポートはしない。抽選は週が変わるまで固定で `cosmetics.yml` に保存する。ゾーン外・ログアウト・死亡・`onDisable` で乗客を remove する。起動時にも、前回残った自前エンティティ(PDC `cosmetic`)をロード済みの範囲から消す。エンダードラゴンは出さない。`PlayerMoveEvent` は増やさない。頭 MOB の向き(左右・上下)は、既存の `onPlayerMove` で向きが変わったときだけ `setRotation` で合わせる(位置は動かさない。MOB がいない人は Map を引いて抜ける)。乗り物に乗っている間(GSit で座っているなど)は PlayerMoveEvent が来ないので、3 tick ごとのタスク(`tickSeated`)で、頭上に MOB がいて乗っている人だけ合わせる。同じタスクで、足元のブロック(花びら・落ち葉)は乗っている間だけ 0.75 上(座面の高さ)に上げる。切り替えるのは座った・立ったときだけ
+- **保存データ**: `config.yml` の `hidden-players`(非表示中)と `welcomed-players`(案内済み)に UUID のリストとして保存する。見た目の秒数と抽選は `cosmetics.yml`(`/afklook` の OFF は同じファイルの `look-off`、週をまたいで残る)
   - 保存のタイミングは変更時(`/afkhide` 実行時、初回案内時)とプラグイン停止時
   - `getConfig()` の更新と YAML 文字列への変換はメインスレッドで行い、ファイルへの書き込みだけを専用スレッド(1 本)で行う。書き込み待ちが残っている間の変更は、最新の内容で 1 回にまとめて書き込む
   - プラグイン停止時は、書き込み待ちが終わるまで最大 10 秒待つ
+  - `cosmetics.yml` も同じ形で、別スレッド `AFKScoreboard-Cosmetic` に書く。`onDisable` ではその前にパーティクル以外の見た目エンティティを消す
 
 ## 過去にハマった点
 
@@ -76,5 +81,10 @@ AxAFKZone の放置ゾーンに滞在しているプレイヤーの連続放置�
 ## ファイル構成(src/main/java/space/gorogoro/afkscoreboard/)
 
 - `AFKScoreboard.java` — メインクラス。ゾーン読み込み、スコアボード、イベント、`/afkhide` コマンド、データ保存をすべて持つ(ゾーン範囲は内部クラス `ZoneArea`)
+- `WeeklyStore.java` — 今週の累計秒数と `data.yml` の非同期保存
+- `CosmeticService.java` — ゾーン内の見た目。停止時の後始末もここ
+- `CosmeticStore.java` — 見た目用の今週の秒数と抽選、`cosmetics.yml` の非同期保存
+- `CosmeticKinds.java` — パーティクル、ブロック、頭 MOB の種類
 - `src/main/resources/plugin.yml` — プラグイン定義、コマンド定義
-- `src/main/resources/config.yml` — 保存データ(`welcomed-players`、`hidden-players`)
+- `src/main/resources/config.yml` — 保存データ(`welcomed-players`、`hidden-players`)と、週の区切り(`timezone`、`week-start-day`)
+

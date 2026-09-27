@@ -5,6 +5,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -60,6 +61,13 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
     // 救済猶予時間（5分 = 300,000ミリ秒）
     private static final long RECOVERY_GRACE_PERIOD_MS = 5 * 60 * 1000L;
 
+    // 今週の累計秒数（data.yml）。ボードに出すのは、今ゾーンにいる人だけ
+    private WeeklyStore weeklyStore;
+    // 週次リセットの確認は 60 秒に 1 回
+    private int weeklyCheckClock;
+    // ゾーン内だけの見た目。停止時に乗客を消す
+    private CosmeticService cosmetics;
+
     // config.yml の書き込み専用スレッド（1本なので書き込みは必ず順番に行われる）
     private final ExecutorService saveExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "AFKScoreboard-Save"));
     // 書き込み待ちの config.yml の内容（null なら書き込み待ちなし）
@@ -71,6 +79,8 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         saveDefaultConfig();
         loadWelcomedPlayers();
         loadHiddenPlayers();
+        this.weeklyStore = new WeeklyStore(this);
+        this.weeklyStore.load();
 
         // スコアボードの初期化
         ScoreboardManager manager = Bukkit.getScoreboardManager();
@@ -97,6 +107,23 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         // 滞在時間のカウントタスク（1秒ごと = 20ティックス）
         Bukkit.getScheduler().runTaskTimer(this, this::incrementTimeEverySecond, 0L, 20L);
 
+        // 週間累計の保存（60秒ごと）。書き込み自体は専用スレッド
+        Bukkit.getScheduler().runTaskTimer(this, this.weeklyStore::requestSave, 1200L, 1200L);
+
+        // 見た目は別タスク。パーティクルは既定 10 秒、追従チェックは 1 秒。乗客なので座標の毎 tick 更新はしない
+        this.cosmetics = new CosmeticService(this);
+        this.cosmetics.load();
+        this.cosmetics.removeStrayEntities();
+        long particleInterval = getConfig().getLong("particle-interval-ticks");
+        if (particleInterval < 20L) {
+            particleInterval = 200L;
+        }
+        Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::tickParticles, particleInterval, particleInterval);
+        Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::maintain, 20L, 20L);
+        Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::requestSave, 1200L, 1200L);
+        // 座っている間は PlayerMoveEvent が来ないので、3 tick ごとに足元ブロックの高さと頭上の MOB の向きを合わせる（向きを送る間隔と同じ）
+        Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::tickSeated, 3L, 3L);
+
         // プラグイン起動時に、既にエリア内にいるプレイヤーを検知してカウントを開始する
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID uuid = player.getUniqueId();
@@ -107,11 +134,30 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
             }
         }
 
+        PluginCommand debugCommand = getCommand("afkdebug");
+        if (debugCommand != null) {
+            debugCommand.setTabCompleter(this);
+        }
+        PluginCommand lookCommand = getCommand("afklook");
+        if (lookCommand != null) {
+            lookCommand.setTabCompleter(this);
+        }
+
         getServer().getPluginManager().registerEvents(this, this);
+        getServer().getPluginManager().registerEvents(this.cosmetics, this);
     }
 
     @Override
     public void onDisable() {
+        if (weeklyStore != null) {
+            weeklyStore.shutdown();
+        }
+
+        // PlugManX の再読み込みでも、頭上のブロックと MOB を残さない
+        if (cosmetics != null) {
+            cosmetics.shutdown();
+        }
+
         // サーバー終了時、既読プレイヤーデータをconfig.ymlに確実に保存
         saveWelcomedPlayers();
         saveHiddenPlayers();
@@ -257,15 +303,167 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
                     player.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
                 }
             }
+            // 見た目ボーナスは非表示中は付けない。切り替えたらその場で合わせる
+            if (cosmetics != null) {
+                cosmetics.refresh(player);
+            }
             return true;
+        }
+
+        if (command.getName().equalsIgnoreCase("afkdebug")) {
+            return handleDebugCommand(player, args);
+        }
+        if (command.getName().equalsIgnoreCase("afklook")) {
+            return handleLookCommand(player, args);
         }
         return false;
     }
 
     /**
+     * 見た目ボーナスを待たずに付与する。OP のみ。放置秒数は変えない。
+     */
+    private boolean handleDebugCommand(Player player, String[] args) {
+        if (cosmetics == null) {
+            player.sendMessage("§c見た目ボーナスはまだ準備できていません。");
+            return true;
+        }
+        if (args.length != 1) {
+            sendDebugUsage(player);
+            return true;
+        }
+        switch (args[0].toLowerCase(Locale.ROOT)) {
+            case "particle", "30m", "30" -> sendDebugGrant(player, cosmetics.debugGrant(player, true, false, false));
+            case "block", "1h", "60" -> sendDebugGrant(player, cosmetics.debugGrant(player, false, true, false));
+            case "mount", "3h", "180" -> sendDebugGrant(player, cosmetics.debugGrant(player, false, false, true));
+            case "all" -> sendDebugGrant(player, cosmetics.debugGrant(player, true, true, true));
+            default -> sendDebugUsage(player);
+        }
+        return true;
+    }
+
+    private void sendDebugGrant(Player player, CosmeticService.DebugGrant grant) {
+        sendDebugLine(player, "30分（パーティクル）", grant.particle, grant.particleNew);
+        sendDebugLine(player, "1時間（ブロック）", grant.block, grant.blockNew);
+        sendDebugLine(player, "3時間（頭MOB）", grant.mount, grant.mountNew);
+        if (grant.hidden) {
+            player.sendMessage("§7/afkhide で非表示中なので、見た目は表示しません。");
+        } else if (grant.inZone) {
+            player.sendMessage("§7ゾーン内なので、この場に表示しました。");
+        } else {
+            player.sendMessage("§7今はゾーン外です。放置ゾーンに入ると表示されます。");
+        }
+    }
+
+    private void sendDebugLine(Player player, String label, String kind, boolean fresh) {
+        if (kind == null) {
+            return;
+        }
+        if (fresh) {
+            player.sendMessage("§f" + label + "を付与しました: §a" + kind);
+        } else {
+            player.sendMessage("§f" + label + "は付与済みです: §a" + kind);
+        }
+    }
+
+    private void sendDebugUsage(Player player) {
+        player.sendMessage("§f/afkdebug <particle|block|mount|all>");
+        player.sendMessage("§7particle §f30分のパーティクル  §7block §f1時間のブロック  §7mount §f3時間の頭MOB  §7all §f3つまとめて");
+        player.sendMessage("§7外すときは /afklook reset");
+    }
+
+    /**
+     * /afklook。見た目の種類ごとに表示と非表示を切り替える。誰でも使える。設定は週をまたいで残る
+     * reset は見た目をすべて外す(秒数は残すので、条件を満たしている見た目はすぐに引き直される)
+     */
+    private boolean handleLookCommand(Player player, String[] args) {
+        if (cosmetics == null) {
+            player.sendMessage("§c見た目ボーナスはまだ準備できていません。");
+            return true;
+        }
+        if (args.length != 1) {
+            sendLookUsage(player);
+            return true;
+        }
+        List<CosmeticStore.Slot> slots;
+        String label;
+        switch (args[0].toLowerCase(Locale.ROOT)) {
+            case "particle" -> {
+                slots = List.of(CosmeticStore.Slot.PARTICLE);
+                label = "パーティクル";
+            }
+            case "block" -> {
+                slots = List.of(CosmeticStore.Slot.BLOCK);
+                label = "ブロック";
+            }
+            case "mount" -> {
+                slots = List.of(CosmeticStore.Slot.MOUNT);
+                label = "頭MOB";
+            }
+            case "all" -> {
+                slots = List.of(CosmeticStore.Slot.PARTICLE, CosmeticStore.Slot.BLOCK, CosmeticStore.Slot.MOUNT);
+                label = "すべての見た目";
+            }
+            case "reset" -> {
+                if (cosmetics.debugClear(player)) {
+                    player.sendMessage("§f見た目を外しました。§7放置の秒数はそのままなので、条件を満たしている見た目はすぐに引き直されます。");
+                } else {
+                    player.sendMessage("§7付与されている見た目はありません。");
+                }
+                return true;
+            }
+            default -> {
+                sendLookUsage(player);
+                return true;
+            }
+        }
+        if (cosmetics.toggleLook(player, slots)) {
+            player.sendMessage("§f" + label + "を§a非表示§fにしました。§7もう一度実行すると表示に戻ります。");
+        } else {
+            player.sendMessage("§f" + label + "を§a表示§fするようにしました。");
+        }
+        return true;
+    }
+
+    private void sendLookUsage(Player player) {
+        player.sendMessage("§f/afklook <particle|block|mount|all|reset>");
+        player.sendMessage("§7見た目を種類ごとに表示/非表示にします。§7particle §fパーティクル  §7block §fブロック  §7mount §f頭MOB  §7all §fすべて");
+        player.sendMessage("§7reset §f見た目をすべて外す（条件を満たしている見た目はすぐに引き直されます）");
+    }
+
+    @Override
+    public List<String> onTabComplete(@NonNull CommandSender sender, @NonNull Command command, @NonNull String alias, String @NonNull [] args) {
+        if (args.length != 1) {
+            return List.of();
+        }
+        List<String> options;
+        if (command.getName().equalsIgnoreCase("afklook")) {
+            options = List.of("particle", "block", "mount", "all", "reset");
+        } else if (command.getName().equalsIgnoreCase("afkdebug")) {
+            options = List.of("particle", "block", "mount", "all");
+        } else {
+            return List.of();
+        }
+        String prefix = args[0].toLowerCase(Locale.ROOT);
+        List<String> matches = new ArrayList<>();
+        for (String option : options) {
+            if (option.startsWith(prefix)) {
+                matches.add(option);
+            }
+        }
+        return matches;
+    }
+
+    /**
+     * /afkhide で非表示にしているか
+     */
+    boolean isHidden(UUID uuid) {
+        return hiddenPlayers.contains(uuid);
+    }
+
+    /**
      * 指定されたロケーションがいずれかの放置ゾーン内にあるかを判定するヘルパー
      */
-    private boolean isPlayerInAnyZone(Location loc) {
+    boolean isPlayerInAnyZone(Location loc) {
         for (ZoneArea zone : loadedZones.values()) {
             if (zone.isInArea(loc)) {
                 return true;
@@ -342,18 +540,28 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
             afkScoreboard.resetScores(entry);
         }
 
-        // 現在放置中の上位10人を取得
-        List<Map.Entry<UUID, Integer>> sortedTop10 = currentSessionTimes.entrySet().stream()
-                .sorted(Map.Entry.<UUID, Integer>comparingByValue().reversed())
-                .limit(10)
-                .toList();
+        // 今ゾーンにいて、ランキング表示がオンの人を、今週の累計で並べる
+        List<Map.Entry<UUID, Integer>> sortedTop10 = new ArrayList<>();
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (hiddenPlayers.contains(online.getUniqueId())) {
+                continue;
+            }
+            if (!isPlayerInAnyZone(online.getLocation())) {
+                continue;
+            }
+            sortedTop10.add(Map.entry(online.getUniqueId(), weeklyStore.getSeconds(online.getUniqueId())));
+        }
+        sortedTop10.sort(Map.Entry.<UUID, Integer>comparingByValue().reversed());
+        if (sortedTop10.size() > 10) {
+            sortedTop10 = sortedTop10.subList(0, 10);
+        }
 
         // 初期値の動的計算: ヘッダー2行 ＋ ランクインしている人数
         // 誰もおらず「誰も放置していません」の1行を表示する場合は「2行 + 1行 = 3」になります
         int scoreValue = 2 + (sortedTop10.isEmpty() ? 1 : sortedTop10.size());
 
         // ヘッダー部分の設定
-        afkObjective.getScore("§7位 プレイヤー §b連続放置時間").setScore(scoreValue--);
+        afkObjective.getScore("§7位 プレイヤー §b今週の放置").setScore(scoreValue--);
         afkObjective.getScore("§8----------------------").setScore(scoreValue--);
 
         if (sortedTop10.isEmpty()) {
@@ -371,6 +579,9 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
             }
 
             String playerName = player.getName();
+            if (playerName.length() > 12) {
+                playerName = playerName.substring(0, 12);
+            }
             int sessionSeconds = entry.getValue();
 
             String currentStr = formatTimeCompact(sessionSeconds);
@@ -385,8 +596,24 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
      * 1秒ごとに、ゾーンにいるプレイヤーの時間（連続）を加算
      */
     private void incrementTimeEverySecond() {
+        if (++weeklyCheckClock >= 60) {
+            weeklyCheckClock = 0;
+            if (weeklyStore.rolloverIfNeeded()) {
+                for (Player online : Bukkit.getOnlinePlayers()) {
+                    if (isPlayerInAnyZone(online.getLocation())) {
+                        online.sendMessage("§e今週の放置ランキングがリセットされました");
+                    }
+                }
+            }
+        }
+
         for (Player player : Bukkit.getOnlinePlayers()) {
-            // afkhide ユーザーは累積カウント処理のみをスキップ（ボードの有無とは分離）
+            // 週間累計は非表示中も残す。ボードに出すかどうかとは分ける
+            if (isPlayerInAnyZone(player.getLocation())) {
+                weeklyStore.addSecond(player.getUniqueId());
+            }
+
+            // afkhide ユーザーは連続放置のカウントだけをスキップ（ボードの有無とは分離）
             if (hiddenPlayers.contains(player.getUniqueId())) {
                 continue;
             }
@@ -402,6 +629,12 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
      */
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
+        // 向きが変わったときだけ、頭上の MOB の向きを合わせる（MOB がいない人は Map を引いて抜ける）
+        if (cosmetics != null && (event.getFrom().getYaw() != event.getTo().getYaw()
+                || event.getFrom().getPitch() != event.getTo().getPitch())) {
+            cosmetics.syncRotation(event.getPlayer(), event.getTo());
+        }
+
         // ブロックの整数値の境界線を越えて移動したときだけ判定（負荷対策）
         if (event.getFrom().getBlockX() == event.getTo().getBlockX() &&
                 event.getFrom().getBlockZ() == event.getTo().getBlockZ()) {
@@ -532,6 +765,9 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         }
 
         public boolean isInArea(Location loc) {
+            if (loc.getWorld() == null) {
+                return false;
+            }
             return loc.getWorld().getName().equalsIgnoreCase(world) &&
                     loc.getX() >= minX && loc.getX() <= maxX &&
                     loc.getY() >= minY && loc.getY() <= maxY &&
