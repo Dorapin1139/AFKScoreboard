@@ -35,9 +35,17 @@ Please place the .jar file in the Paper plugins folder.
 # Usage
 ```
 /afkhide   放置ランキングから自分を表示/非表示できます
+/afkdebug <particle|block|mount|all|reset>
 ```
-- 権限は不要で、全員が使えます
+- `/afkhide` は権限不要で、全員が使えます
 - 非表示中は放置時間がカウントされませんが、ゾーン内ではスコアボード自体は表示されます
+- `/afkdebug` は OP だけです。30分・1時間・3時間を待たずに見た目を付与します。放置の秒数は増やしません
+  - `particle` … 30分のパーティクル
+  - `block` … 1時間のブロック
+  - `mount` … 3時間の頭MOB
+  - `all` … 3つまとめて
+  - `reset` … 付与した見た目を外す（秒数は残す）
+  - ゾーン内ならその場で表示します。ゾーン外で実行した場合は、入ったときに表示されます
 
 # Data
 `plugins/AFKScoreboard/config.yml` に以下を保存します。

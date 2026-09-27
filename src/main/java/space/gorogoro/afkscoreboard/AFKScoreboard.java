@@ -5,6 +5,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -120,6 +121,11 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
                 currentSessionTimes.put(uuid, 0);
                 player.setScoreboard(afkScoreboard);
             }
+        }
+
+        PluginCommand debugCommand = getCommand("afkdebug");
+        if (debugCommand != null) {
+            debugCommand.setTabCompleter(this);
         }
 
         getServer().getPluginManager().registerEvents(this, this);
@@ -280,7 +286,84 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
             }
             return true;
         }
+
+        if (command.getName().equalsIgnoreCase("afkdebug")) {
+            return handleDebugCommand(player, args);
+        }
         return false;
+    }
+
+    /**
+     * 見た目ボーナスを待たずに付与する。OP のみ。放置秒数は変えない。
+     */
+    private boolean handleDebugCommand(Player player, String[] args) {
+        if (cosmetics == null) {
+            player.sendMessage("§c見た目ボーナスはまだ準備できていません。");
+            return true;
+        }
+        if (args.length != 1) {
+            sendDebugUsage(player);
+            return true;
+        }
+        String arg = args[0].toLowerCase(Locale.ROOT);
+        switch (arg) {
+            case "particle", "30m", "30" -> sendDebugGrant(player, cosmetics.debugGrant(player, true, false, false));
+            case "block", "1h", "60" -> sendDebugGrant(player, cosmetics.debugGrant(player, false, true, false));
+            case "mount", "3h", "180" -> sendDebugGrant(player, cosmetics.debugGrant(player, false, false, true));
+            case "all" -> sendDebugGrant(player, cosmetics.debugGrant(player, true, true, true));
+            case "reset", "clear", "off" -> {
+                if (cosmetics.debugClear(player)) {
+                    player.sendMessage("§fデバッグで付与した見た目を外しました。§7放置の秒数はそのままです。");
+                } else {
+                    player.sendMessage("§7付与されている見た目はありません。");
+                }
+            }
+            default -> sendDebugUsage(player);
+        }
+        return true;
+    }
+
+    private void sendDebugGrant(Player player, CosmeticService.DebugGrant grant) {
+        sendDebugLine(player, "30分（パーティクル）", grant.particle, grant.particleNew);
+        sendDebugLine(player, "1時間（ブロック）", grant.block, grant.blockNew);
+        sendDebugLine(player, "3時間（頭MOB）", grant.mount, grant.mountNew);
+        if (grant.inZone) {
+            player.sendMessage("§7ゾーン内なので、この場に表示しました。");
+        } else {
+            player.sendMessage("§7今はゾーン外です。放置ゾーンに入ると表示されます。");
+        }
+    }
+
+    private void sendDebugLine(Player player, String label, String kind, boolean fresh) {
+        if (kind == null) {
+            return;
+        }
+        if (fresh) {
+            player.sendMessage("§f" + label + "を付与しました: §a" + kind);
+        } else {
+            player.sendMessage("§f" + label + "は付与済みです: §a" + kind);
+        }
+    }
+
+    private void sendDebugUsage(Player player) {
+        player.sendMessage("§f/afkdebug <particle|block|mount|all|reset>");
+        player.sendMessage("§7particle §f30分のパーティクル  §7block §f1時間のブロック  §7mount §f3時間の頭MOB");
+        player.sendMessage("§7all §f3つまとめて  §7reset §f付与を外す（放置秒数は残します）");
+    }
+
+    @Override
+    public List<String> onTabComplete(@NonNull CommandSender sender, @NonNull Command command, @NonNull String alias, String @NonNull [] args) {
+        if (!command.getName().equalsIgnoreCase("afkdebug") || args.length != 1) {
+            return List.of();
+        }
+        String prefix = args[0].toLowerCase(Locale.ROOT);
+        List<String> matches = new ArrayList<>();
+        for (String option : List.of("particle", "block", "mount", "all", "reset")) {
+            if (option.startsWith(prefix)) {
+                matches.add(option);
+            }
+        }
+        return matches;
     }
 
     /**

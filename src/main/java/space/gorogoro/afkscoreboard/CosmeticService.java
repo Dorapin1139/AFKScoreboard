@@ -134,6 +134,74 @@ final class CosmeticService implements Listener {
         }
     }
 
+    /**
+     * デバッグ付与。放置秒数は増やさない。未抽選の枠だけその場で決める。
+     * ゾーン内ならすぐに出し、ゾーン外では入ったときに出す。
+     */
+    DebugGrant debugGrant(Player player, boolean particle, boolean block, boolean mount) {
+        CosmeticStore.Record record = store.record(player.getUniqueId());
+        DebugGrant grant = new DebugGrant();
+        boolean changed = false;
+        if (particle) {
+            grant.particleNew = CosmeticKinds.ParticleKind.parse(record.particle) == null;
+            if (grant.particleNew) {
+                record.particle = CosmeticKinds.ParticleKind.random().name();
+                changed = true;
+            }
+            grant.particle = record.particle;
+        }
+        if (block) {
+            grant.blockNew = CosmeticKinds.BlockKind.parse(record.block) == null;
+            if (grant.blockNew) {
+                record.block = CosmeticKinds.BlockKind.random().name();
+                changed = true;
+            }
+            grant.block = record.block;
+        }
+        if (mount) {
+            grant.mountNew = CosmeticKinds.MountKind.parse(record.mount) == null;
+            if (grant.mountNew) {
+                record.mount = CosmeticKinds.MountKind.random().name();
+                record.mountVariant = null;
+                changed = true;
+            }
+            grant.mount = record.mount;
+        }
+        if (changed) {
+            store.markDirty();
+            store.requestSave();
+        }
+        grant.inZone = plugin.isPlayerInAnyZone(player.getLocation());
+        if (grant.inZone) {
+            sync(player);
+            Active state = active.get(player.getUniqueId());
+            if (state != null && state.particle != null) {
+                spawnParticle(player, state.particle);
+            }
+        }
+        return grant;
+    }
+
+    /**
+     * デバッグ付与を外す。今週の放置秒数は残す。
+     */
+    boolean debugClear(Player player) {
+        CosmeticStore.Record record = store.record(player.getUniqueId());
+        boolean had = CosmeticKinds.ParticleKind.parse(record.particle) != null
+                || CosmeticKinds.BlockKind.parse(record.block) != null
+                || CosmeticKinds.MountKind.parse(record.mount) != null;
+        record.particle = null;
+        record.block = null;
+        record.mount = null;
+        record.mountVariant = null;
+        if (had) {
+            store.markDirty();
+            store.requestSave();
+        }
+        clear(player);
+        return had;
+    }
+
     void tickParticles() {
         for (Map.Entry<UUID, Active> entry : active.entrySet()) {
             Player player = Bukkit.getPlayer(entry.getKey());
@@ -606,5 +674,15 @@ final class CosmeticService implements Listener {
     }
 
     private record Offset(float x, float y, float z, float scale) {
+    }
+
+    static final class DebugGrant {
+        String particle;
+        String block;
+        String mount;
+        boolean particleNew;
+        boolean blockNew;
+        boolean mountNew;
+        boolean inZone;
     }
 }
