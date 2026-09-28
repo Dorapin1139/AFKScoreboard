@@ -489,8 +489,9 @@ final class CosmeticService implements Listener {
         entity.setSilent(true);
         entity.setGravity(false);
         entity.setInvulnerable(true);
-        entity.setCustomNameVisible(false);
-        entity.customName(null);
+        // 頭上の MOB でプレイヤーのネームタグが隠れるので、MOB の上に名前(色付き)を出す
+        entity.customName(player.displayName());
+        entity.setCustomNameVisible(true);
         if (entity instanceof LivingEntity living) {
             living.setCollidable(false);
             living.setRemoveWhenFarAway(false);
