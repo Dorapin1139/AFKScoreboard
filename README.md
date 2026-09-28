@@ -82,7 +82,7 @@ IntelliJ IDEA 上で正しくプラグイン（JARファイル）を生成する
 ### 📦 生成されたファイルの場所
 ビルドが成功すると、プロジェクトのルート直下に `build/libs` フォルダが作成（または更新）され、その中に中身の詰まった正しい JAR ファイルが生成されます。
 
-* **生成先:** `build/libs/AFKScoreboard-1.1.2.jar`
+* **生成先:** `build/libs/AFKScoreboard-1.1.3.jar`
 
 この JAR ファイルを Minecraft サーバーの `plugins` フォルダに配置してください。
 
