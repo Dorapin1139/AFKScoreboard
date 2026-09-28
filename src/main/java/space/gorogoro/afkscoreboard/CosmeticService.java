@@ -25,6 +25,7 @@ import org.bukkit.entity.PolarBear;
 import org.bukkit.entity.PufferFish;
 import org.bukkit.entity.Rabbit;
 import org.bukkit.entity.Sittable;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.entity.Villager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -61,6 +62,10 @@ final class CosmeticService implements Listener {
     private final CosmeticStore store;
     private final NamespacedKey tagKey;
     private final NamespacedKey ownerKey;
+    // 座っている間、足元のブロックを上げる量(腰の高さ)。床に直接座ると少し浮くかもしれないので実機で調整する
+    private static final float SEATED_FLOOR_LIFT = 0.75f;
+    // 名前を出す高さ(頭の上からのずらし)。バニラのネームタグとほぼ同じ位置。実機で調整する
+    private static final float NAME_TAG_LIFT = 0.25f;
 
     private final Map<UUID, Active> active = new HashMap<>();
     private int weekClock;
@@ -254,17 +259,29 @@ final class CosmeticService implements Listener {
     }
 
     /**
-     * 3 tick に 1 回。何かに乗っている(GSit で座っているなど)人について、頭上の MOB の向きを合わせる。
-     * 乗っている間は PlayerMoveEvent が来ないため。見るのは頭上 MOB がある人だけ。
+     * 3 tick に 1 回。何かに乗っている(GSit で座っているなど)人について、
+     * 足元のブロック(花びら・苔)を座面の高さに上げ下げし、頭上の MOB の向きを合わせる。
+     * 乗っている間は PlayerMoveEvent が来ないため。見るのは足元ブロックか頭上 MOB がある人だけ。
      */
     void tickSeated() {
         for (Map.Entry<UUID, Active> entry : active.entrySet()) {
             Active state = entry.getValue();
-            if (state.rider == null || !state.rider.isValid()) {
+            boolean hasFloor = isFloor(state.block) && !state.displays.isEmpty();
+            boolean hasRider = state.rider != null && state.rider.isValid();
+            if (!hasFloor && !hasRider) {
                 continue;
             }
             Player player = Bukkit.getPlayer(entry.getKey());
-            if (player == null || !player.isInsideVehicle()) {
+            if (player == null) {
+                continue;
+            }
+            boolean seated = player.isInsideVehicle();
+            // 座った・立ったときだけ高さを切り替える
+            if (hasFloor && seated != state.floorLifted) {
+                liftDisplays(state, seated ? SEATED_FLOOR_LIFT : -SEATED_FLOOR_LIFT);
+                state.floorLifted = seated;
+            }
+            if (!hasRider || !seated) {
                 continue;
             }
             Location look = player.getLocation();
@@ -334,6 +351,8 @@ final class CosmeticService implements Listener {
                 }
             }
         }
+
+        syncNameTag(player, state);
     }
 
     private boolean unlockIfNeeded(CosmeticStore.Record record) {
@@ -377,6 +396,7 @@ final class CosmeticService implements Listener {
             if (state != null) {
                 removeDisplays(state);
                 removeRider(state);
+                removeNameTag(state);
             }
             if (player != null) {
                 stripPassengers(player);
@@ -412,9 +432,22 @@ final class CosmeticService implements Listener {
                     new Offset(-0.45f, -1.15f, 0.05f, 0.48f),
                     new Offset(0.4f, -1.05f, -0.1f, 0.48f)
             };
+            // 散らばり方はそのまま、全体の範囲(x -0.495〜0.495、z -0.515〜0.515)の中心をプレイヤーの真下にする
+            case PETALS -> new Offset[] {
+                    new Offset(-0.495f, -1.76f, -0.155f, 0.5f),
+                    new Offset(0.045f, -1.76f, -0.515f, 0.45f),
+                    new Offset(-0.155f, -1.76f, 0.065f, 0.45f)
+            };
+            // 4 枚を並べ、全体の範囲(x -0.525〜0.525、z -0.525〜0.525)の中心をプレイヤーの真下にする
+            case MOSS -> new Offset[] {
+                    new Offset(-0.525f, -1.78f, -0.525f, 0.55f),
+                    new Offset(-0.025f, -1.78f, -0.525f, 0.55f),
+                    new Offset(-0.525f, -1.78f, -0.025f, 0.55f),
+                    new Offset(-0.025f, -1.78f, -0.025f, 0.55f)
+            };
         };
         World world = player.getWorld();
-        // 向きを 0 にして出す。プレイヤーの向きを引き継ぐと、ずらし(translation)ごと回転して位置がずれる
+        // 向きを 0 にして出す。プレイヤーの向きを引き継ぐと、ずらし(translation)ごと回転して足元から外れる
         Location spawnAt = player.getLocation();
         spawnAt.setYaw(0.0f);
         spawnAt.setPitch(0.0f);
@@ -671,6 +704,24 @@ final class CosmeticService implements Listener {
             allowDismount = outer;
         }
         state.displays.clear();
+        // 出し直すと元の高さに戻るので、座っていれば次の 3 tick で上げ直す
+        state.floorLifted = false;
+    }
+
+    private static boolean isFloor(CosmeticKinds.BlockKind kind) {
+        return kind == CosmeticKinds.BlockKind.PETALS || kind == CosmeticKinds.BlockKind.MOSS;
+    }
+
+    private void liftDisplays(Active state, float dy) {
+        for (BlockDisplay display : state.displays) {
+            if (display == null || !display.isValid()) {
+                continue;
+            }
+            Transformation current = display.getTransformation();
+            Vector3f translation = new Vector3f(current.getTranslation()).add(0.0f, dy, 0.0f);
+            display.setTransformation(new Transformation(
+                    translation, current.getLeftRotation(), current.getScale(), current.getRightRotation()));
+        }
     }
 
     private void removeRider(Active state) {
@@ -685,6 +736,64 @@ final class CosmeticService implements Listener {
             allowDismount = outer;
         }
         state.rider = null;
+    }
+
+    /**
+     * 何かが乗っているプレイヤーのネームタグは、クライアントが表示しない。
+     * ブロックだけが乗っている間は、代わりに名前の TextDisplay を頭の上に乗せる(頭上 MOB がいるときは MOB の名前で足りる)。
+     */
+    private void syncNameTag(Player player, Active state) {
+        boolean needed = !state.displays.isEmpty() && state.rider == null;
+        if (!needed) {
+            removeNameTag(state);
+            return;
+        }
+        if (state.nameTag != null && state.nameTag.isValid()) {
+            if (!player.getPassengers().contains(state.nameTag)) {
+                player.addPassenger(state.nameTag);
+            }
+            return;
+        }
+        removeNameTag(state);
+        Location spawnAt = player.getLocation();
+        spawnAt.setYaw(0.0f);
+        spawnAt.setPitch(0.0f);
+        TextDisplay nameTag = player.getWorld().spawn(spawnAt, TextDisplay.class, entity -> {
+            tag(entity, player.getUniqueId());
+            entity.text(player.displayName());
+            entity.setPersistent(false);
+            entity.setInvulnerable(true);
+            entity.setGravity(false);
+            // バニラのネームタグと同じく、常にこちらを向き、64 ブロックまで見える
+            entity.setBillboard(Display.Billboard.CENTER);
+            entity.setViewRange(1.0f);
+            entity.setShadowRadius(0.0f);
+            entity.setShadowStrength(0.0f);
+            entity.setInterpolationDuration(0);
+            entity.setTransformation(new Transformation(
+                    new Vector3f(0.0f, NAME_TAG_LIFT, 0.0f),
+                    new Quaternionf(),
+                    new Vector3f(1.0f, 1.0f, 1.0f),
+                    new Quaternionf()));
+        });
+        // バニラと同じく、自分の名前は自分には見せない
+        player.hideEntity(plugin, nameTag);
+        player.addPassenger(nameTag);
+        state.nameTag = nameTag;
+    }
+
+    private void removeNameTag(Active state) {
+        // 自分で消すときは降車を止めない(removeDisplays と同じ理由)
+        boolean outer = allowDismount;
+        allowDismount = true;
+        try {
+            if (state.nameTag != null && state.nameTag.isValid()) {
+                state.nameTag.remove();
+            }
+        } finally {
+            allowDismount = outer;
+        }
+        state.nameTag = null;
     }
 
     private void stripPassengers(Player player) {
@@ -759,6 +868,10 @@ final class CosmeticService implements Listener {
         private CosmeticKinds.MountKind mount;
         private final List<BlockDisplay> displays = new ArrayList<>();
         private LivingEntity rider;
+        // ブロックだけが乗っている間に出す、ネームタグの代わりの名前
+        private TextDisplay nameTag;
+        // 足元のブロックを座面の高さに上げているか
+        private boolean floorLifted;
     }
 
     private record Offset(float x, float y, float z, float scale) {

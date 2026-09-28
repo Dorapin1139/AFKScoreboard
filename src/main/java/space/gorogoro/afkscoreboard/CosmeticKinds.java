@@ -46,7 +46,9 @@ final class CosmeticKinds {
 
     enum BlockKind {
         COBWEB(Material.COBWEB),
-        AZALEA(Material.FLOWERING_AZALEA_LEAVES);
+        AZALEA(Material.FLOWERING_AZALEA_LEAVES),
+        PETALS(Material.PINK_PETALS),
+        MOSS(Material.MOSS_CARPET);
 
         final Material material;
 

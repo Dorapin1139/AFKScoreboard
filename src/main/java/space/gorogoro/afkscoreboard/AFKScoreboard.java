@@ -121,7 +121,7 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::tickParticles, particleInterval, particleInterval);
         Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::maintain, 20L, 20L);
         Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::requestSave, 1200L, 1200L);
-        // 座っている間は PlayerMoveEvent が来ないので、3 tick ごとに頭上の MOB の向きを合わせる（向きを送る間隔と同じ）
+        // 座っている間は PlayerMoveEvent が来ないので、3 tick ごとに足元ブロックの高さと頭上の MOB の向きを合わせる（向きを送る間隔と同じ）
         Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::tickSeated, 3L, 3L);
 
         // プラグイン起動時に、既にエリア内にいるプレイヤーを検知してカウントを開始する
