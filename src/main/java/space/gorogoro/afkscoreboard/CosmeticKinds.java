@@ -129,8 +129,8 @@ final class CosmeticKinds {
         double mountedScale() {
             return switch (this) {
                 case SNIFFER, CAMEL -> 0.35;
-                // 身長 1.7 を、頭に乗るくらい（約 0.7）まで。爆発は別で止める
-                case CREEPER -> 0.4;
+                // 身長 1.7 を、頭より少し大きいくらい（約 0.85）まで。爆発は別で止める
+                case CREEPER -> 0.5;
                 case PANDA -> 0.45;
                 // 甲羅の幅 1.2 を、頭の幅くらい（約 0.6）まで
                 case TURTLE -> 0.5;
