@@ -6,8 +6,8 @@ welcomed-players: []
 hidden-players: []
 
 # 見た目ボーナス。表示は放置ゾーンの中だけ。秒数と抽選は cosmetics.yml。
-# パーティクルの間隔（20 tick = 1 秒）。既定 200 = 10 秒。
-particle-interval-ticks: 200
+# パーティクルの間隔（20 tick = 1 秒）。既定 60 = 3 秒。
+particle-interval-ticks: 60
 
 # 今週、ゾーン内にいた秒数。週が変わると抽選も戻る。
 thresholds:

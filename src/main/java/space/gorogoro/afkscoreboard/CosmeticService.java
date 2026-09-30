@@ -7,9 +7,16 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Registry;
 import org.bukkit.World;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.MultipleFacing;
 import org.bukkit.entity.Ageable;
+import org.bukkit.entity.Axolotl;
 import org.bukkit.entity.Bee;
 import org.bukkit.entity.BlockDisplay;
+import org.bukkit.entity.Camel;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Chicken;
 import org.bukkit.entity.Cow;
@@ -17,26 +24,36 @@ import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Fox;
 import org.bukkit.entity.Frog;
+import org.bukkit.entity.Goat;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
+import org.bukkit.entity.MushroomCow;
+import org.bukkit.entity.Panda;
 import org.bukkit.entity.Parrot;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.PolarBear;
 import org.bukkit.entity.PufferFish;
 import org.bukkit.entity.Rabbit;
+import org.bukkit.entity.Salmon;
 import org.bukkit.entity.Sittable;
+import org.bukkit.entity.Slime;
+import org.bukkit.entity.Sniffer;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.entity.Villager;
+import org.bukkit.entity.Wolf;
+import org.bukkit.entity.ZombieNautilus;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDismountEvent;
+import org.bukkit.event.entity.EntityMountEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerBucketEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerShearEntityEvent;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Transformation;
 import org.joml.Quaternionf;
@@ -260,7 +277,7 @@ final class CosmeticService implements Listener {
 
     /**
      * 3 tick に 1 回。何かに乗っている(GSit で座っているなど)人について、
-     * 足元のブロック(花びら・苔)を座面の高さに上げ下げし、頭上の MOB の向きを合わせる。
+     * 足元のブロック(花びら)を座面の高さに上げ下げし、頭上の MOB の向きを合わせる。
      * 乗っている間は PlayerMoveEvent が来ないため。見るのは足元ブロックか頭上 MOB がある人だけ。
      */
     void tickSeated() {
@@ -428,9 +445,13 @@ final class CosmeticService implements Listener {
                     new Offset(-0.25f, -0.15f, 0.05f, 0.42f),
                     new Offset(0.2f, 0.05f, -0.15f, 0.38f)
             };
+            // 肩と背中、脇から葉が生えている。上端は目より下
             case AZALEA -> new Offset[] {
-                    new Offset(-0.45f, -1.15f, 0.05f, 0.48f),
-                    new Offset(0.4f, -1.05f, -0.1f, 0.48f)
+                    new Offset(-0.34f, -0.82f, -0.02f, 0.36f),
+                    new Offset(0.06f, -0.78f, 0.12f, 0.32f),
+                    new Offset(-0.12f, -0.98f, 0.20f, 0.34f),
+                    new Offset(-0.30f, -1.22f, -0.10f, 0.28f),
+                    new Offset(0.22f, -1.05f, -0.16f, 0.26f)
             };
             // 散らばり方はそのまま、全体の範囲(x -0.495〜0.495、z -0.515〜0.515)の中心をプレイヤーの真下にする
             case PETALS -> new Offset[] {
@@ -438,12 +459,29 @@ final class CosmeticService implements Listener {
                     new Offset(0.045f, -1.76f, -0.515f, 0.45f),
                     new Offset(-0.155f, -1.76f, 0.065f, 0.45f)
             };
-            // 4 枚を並べ、全体の範囲(x -0.525〜0.525、z -0.525〜0.525)の中心をプレイヤーの真下にする
+            // 肩・背中・脚に薄く生えた苔。カーペットは底面だけなので、角の高さが見た目の高さ
             case MOSS -> new Offset[] {
-                    new Offset(-0.525f, -1.78f, -0.525f, 0.55f),
-                    new Offset(-0.025f, -1.78f, -0.525f, 0.55f),
-                    new Offset(-0.525f, -1.78f, -0.025f, 0.55f),
-                    new Offset(-0.025f, -1.78f, -0.025f, 0.55f)
+                    sheet(-0.22f, -0.50f, -0.06f, 0.40f, 1.0f, 0.34f, 0f, 0f, 0f),
+                    sheet(0.02f, -0.52f, 0.04f, 0.34f, 1.0f, 0.30f, 0f, 0f, 0f),
+                    sheet(-0.10f, -0.78f, 0.18f, 0.36f, 1.0f, 0.28f, 0f, 0f, 0f),
+                    sheet(-0.08f, -1.28f, -0.05f, 0.32f, 1.0f, 0.28f, 0f, 0f, 0f),
+                    sheet(0.12f, -1.18f, 0.08f, 0.28f, 1.0f, 0.24f, 0f, 12f, 0f)
+            };
+            // 肩と背中に盛り上がった苔の塊。厚みは低くして、貼り付いて生えたようにする
+            case MOSS_BLOCK -> new Offset[] {
+                    sheet(-0.30f, -0.66f, -0.04f, 0.26f, 0.14f, 0.22f, 0f, 0f, 0f),
+                    sheet(0.08f, -0.60f, 0.02f, 0.22f, 0.12f, 0.20f, 0f, 0f, 0f),
+                    sheet(-0.08f, -0.90f, 0.18f, 0.28f, 0.14f, 0.18f, 0f, 0f, 0f),
+                    sheet(0.22f, -1.14f, -0.08f, 0.16f, 0.16f, 0.20f, 0f, 0f, 0f)
+            };
+            // 面だけの蔓。胴の横、背中、腹、肩、脚に沿わせる。目の正面は空けておく
+            case VINE -> new Offset[] {
+                    sheet(-0.42f, -1.35f, -0.18f, 0.08f, 0.85f, 0.40f, 0f, 0f, 0f, BlockFace.WEST, BlockFace.EAST),
+                    sheet(0.32f, -1.25f, -0.05f, 0.07f, 0.70f, 0.32f, 0f, 0f, 0f, BlockFace.EAST, BlockFace.WEST),
+                    sheet(-0.20f, -0.98f, 0.28f, 0.45f, 0.50f, 0.06f, 0f, 18f, 0f, BlockFace.SOUTH, BlockFace.NORTH),
+                    sheet(-0.10f, -1.18f, -0.38f, 0.32f, 0.40f, 0.06f, 0f, -12f, 0f, BlockFace.NORTH, BlockFace.SOUTH),
+                    sheet(-0.34f, -0.68f, 0.02f, 0.10f, 0.35f, 0.28f, 0f, 0f, 25f, BlockFace.WEST, BlockFace.EAST),
+                    sheet(0.18f, -1.62f, 0.05f, 0.06f, 0.45f, 0.18f, 0f, 0f, 0f, BlockFace.EAST, BlockFace.WEST)
             };
         };
         World world = player.getWorld();
@@ -454,7 +492,7 @@ final class CosmeticService implements Listener {
         for (Offset offset : offsets) {
             BlockDisplay display = world.spawn(spawnAt, BlockDisplay.class, entity -> {
                 tag(entity, player.getUniqueId());
-                entity.setBlock(kind.material.createBlockData());
+                entity.setBlock(blockData(kind, offset.faces()));
                 entity.setPersistent(false);
                 entity.setInvulnerable(true);
                 entity.setGravity(false);
@@ -464,15 +502,35 @@ final class CosmeticService implements Listener {
                 entity.setShadowStrength(0.0f);
                 entity.setBrightness(new Display.Brightness(15, 15));
                 entity.setInterpolationDuration(0);
+                Quaternionf rotation = new Quaternionf()
+                        .rotateX((float) Math.toRadians(offset.pitch()))
+                        .rotateY((float) Math.toRadians(offset.yaw()))
+                        .rotateZ((float) Math.toRadians(offset.roll()));
                 entity.setTransformation(new Transformation(
-                        new Vector3f(offset.x, offset.y, offset.z),
-                        new Quaternionf(),
-                        new Vector3f(offset.scale, offset.scale, offset.scale),
+                        new Vector3f(offset.x(), offset.y(), offset.z()),
+                        rotation,
+                        new Vector3f(offset.sx(), offset.sy(), offset.sz()),
                         new Quaternionf()));
             });
             player.addPassenger(display);
             state.displays.add(display);
         }
+    }
+
+    private static Offset sheet(float x, float y, float z, float sx, float sy, float sz,
+            float pitch, float yaw, float roll, BlockFace... faces) {
+        BlockFace[] stored = faces == null || faces.length == 0 ? null : faces;
+        return new Offset(x, y, z, sx, sy, sz, pitch, yaw, roll, stored);
+    }
+
+    private static BlockData blockData(CosmeticKinds.BlockKind kind, BlockFace[] faces) {
+        BlockData data = kind.material.createBlockData();
+        if (faces != null && data instanceof MultipleFacing facing) {
+            for (BlockFace face : faces) {
+                facing.setFace(face, true);
+            }
+        }
+        return data;
     }
 
     private LivingEntity spawnMount(Player player, CosmeticKinds.MountKind kind, String variant) {
@@ -518,7 +576,30 @@ final class CosmeticService implements Listener {
             ageable.setAgeLock(true);
         }
         if (entity instanceof PufferFish puffer) {
-            puffer.setPuffState(1);
+            // 0 が通常、1 が半膨張、2 が最大
+            puffer.setPuffState(2);
+        }
+        if (entity instanceof Slime slime) {
+            // サイズ 2 を縮めて、頭に乗るくらいの中くらいにする
+            slime.setSize(2);
+        }
+        if (entity instanceof LivingEntity livingScaled) {
+            double scale = kind.mountedScale();
+            if (scale != 1.0) {
+                AttributeInstance attribute = livingScaled.getAttribute(Attribute.SCALE);
+                if (attribute != null) {
+                    attribute.setBaseValue(scale);
+                }
+            }
+        }
+        if (entity instanceof Sniffer sniffer) {
+            sniffer.setState(Sniffer.State.IDLING);
+        }
+        if (entity instanceof Wolf wolf) {
+            wolf.setAngry(false);
+        }
+        if (entity instanceof Camel camel) {
+            camel.setDashing(false);
         }
         if (entity instanceof Bee bee) {
             bee.setAnger(0);
@@ -584,7 +665,55 @@ final class CosmeticService implements Listener {
                     villager.setVillagerType(type);
                 }
             });
-            case PUFFERFISH, BEE, POLAR_BEAR -> {
+            case WOLF -> applyRegistry(Wolf.Variant.class, stored, variant -> {
+                if (entity instanceof Wolf wolf) {
+                    wolf.setVariant(variant);
+                }
+            });
+            case AXOLOTL -> {
+                if (entity instanceof Axolotl axolotl) {
+                    axolotl.setVariant(pickEnum(Axolotl.Variant.class, stored));
+                }
+            }
+            case SALMON -> {
+                if (entity instanceof Salmon salmon) {
+                    salmon.setVariant(pickEnum(Salmon.Variant.class, stored));
+                }
+            }
+            case MOOSHROOM -> {
+                if (entity instanceof MushroomCow cow) {
+                    cow.setVariant(pickEnum(MushroomCow.Variant.class, stored));
+                }
+            }
+            case ZOMBIE_NAUTILUS -> applyRegistry(ZombieNautilus.Variant.class, stored, variant -> {
+                if (entity instanceof ZombieNautilus nautilus) {
+                    nautilus.setVariant(variant);
+                }
+            });
+            case GOAT -> {
+                if (entity instanceof Goat goat) {
+                    boolean screaming = stored == null || stored.isBlank()
+                            ? ThreadLocalRandom.current().nextBoolean()
+                            : "SCREAMING".equalsIgnoreCase(stored.trim());
+                    goat.setScreaming(screaming);
+                }
+            }
+            case PANDA -> {
+                if (entity instanceof Panda panda) {
+                    String mainRaw = stored;
+                    String hiddenRaw = null;
+                    if (stored != null && stored.contains("/")) {
+                        String[] parts = stored.split("/", 2);
+                        mainRaw = parts[0];
+                        hiddenRaw = parts[1];
+                    }
+                    panda.setMainGene(pickEnum(Panda.Gene.class, mainRaw));
+                    panda.setHiddenGene(pickEnum(Panda.Gene.class, hiddenRaw));
+                    panda.setRolling(false);
+                    panda.setOnBack(false);
+                }
+            }
+            case PUFFERFISH, BEE, POLAR_BEAR, TURTLE, COD, SQUID, GLOW_SQUID, ARMADILLO, NAUTILUS, SNIFFER, CAMEL, SLIME -> {
             }
         }
     }
@@ -616,6 +745,30 @@ final class CosmeticService implements Listener {
         }
         if (entity instanceof PufferFish puffer) {
             return Integer.toString(puffer.getPuffState());
+        }
+        if (entity instanceof Wolf wolf) {
+            return keyOf(wolf.getVariant());
+        }
+        if (entity instanceof Axolotl axolotl && axolotl.getVariant() != null) {
+            return axolotl.getVariant().name();
+        }
+        if (entity instanceof Salmon salmon && salmon.getVariant() != null) {
+            return salmon.getVariant().name();
+        }
+        if (entity instanceof MushroomCow cow && cow.getVariant() != null) {
+            return cow.getVariant().name();
+        }
+        if (entity instanceof ZombieNautilus nautilus) {
+            return keyOf(nautilus.getVariant());
+        }
+        if (entity instanceof Goat goat) {
+            return goat.isScreaming() ? "SCREAMING" : "NORMAL";
+        }
+        if (entity instanceof Panda panda && panda.getMainGene() != null && panda.getHiddenGene() != null) {
+            return panda.getMainGene().name() + "/" + panda.getHiddenGene().name();
+        }
+        if (entity instanceof Slime slime) {
+            return Integer.toString(slime.getSize());
         }
         return null;
     }
@@ -709,7 +862,7 @@ final class CosmeticService implements Listener {
     }
 
     private static boolean isFloor(CosmeticKinds.BlockKind kind) {
-        return kind == CosmeticKinds.BlockKind.PETALS || kind == CosmeticKinds.BlockKind.MOSS;
+        return kind == CosmeticKinds.BlockKind.PETALS;
     }
 
     private void liftDisplays(Active state, float dy) {
@@ -843,6 +996,21 @@ final class CosmeticService implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onShear(PlayerShearEntityEvent event) {
+        if (isOurs(event.getEntity())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onRide(EntityMountEvent event) {
+        // ラクダやオウムガイに他の人が乗るのは止める。自分の頭へ乗せるときは乗り物がプレイヤーなのでここには来ない
+        if (isOurs(event.getMount())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onDismount(EntityDismountEvent event) {
         // 安い判定を先に行い、PDC の読み取り(isOurs)は最後にする
         if (allowDismount || !(event.getDismounted() instanceof Player player)) {
@@ -874,7 +1042,11 @@ final class CosmeticService implements Listener {
         private boolean floorLifted;
     }
 
-    private record Offset(float x, float y, float z, float scale) {
+    private record Offset(float x, float y, float z, float sx, float sy, float sz,
+            float pitch, float yaw, float roll, BlockFace[] faces) {
+        private Offset(float x, float y, float z, float scale) {
+            this(x, y, z, scale, scale, scale, 0f, 0f, 0f, null);
+        }
     }
 
     static final class DebugGrant {

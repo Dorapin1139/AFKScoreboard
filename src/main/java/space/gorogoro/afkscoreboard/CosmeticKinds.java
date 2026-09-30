@@ -48,7 +48,9 @@ final class CosmeticKinds {
         COBWEB(Material.COBWEB),
         AZALEA(Material.FLOWERING_AZALEA_LEAVES),
         PETALS(Material.PINK_PETALS),
-        MOSS(Material.MOSS_CARPET);
+        MOSS(Material.MOSS_CARPET),
+        MOSS_BLOCK(Material.MOSS_BLOCK),
+        VINE(Material.VINE);
 
         final Material material;
 
@@ -84,7 +86,23 @@ final class CosmeticKinds {
         PARROT(EntityType.PARROT),
         COW(EntityType.COW),
         POLAR_BEAR(EntityType.POLAR_BEAR),
-        VILLAGER(EntityType.VILLAGER);
+        VILLAGER(EntityType.VILLAGER),
+        WOLF(EntityType.WOLF),
+        TURTLE(EntityType.TURTLE),
+        AXOLOTL(EntityType.AXOLOTL),
+        COD(EntityType.COD),
+        SALMON(EntityType.SALMON),
+        MOOSHROOM(EntityType.MOOSHROOM),
+        SQUID(EntityType.SQUID),
+        GLOW_SQUID(EntityType.GLOW_SQUID),
+        ARMADILLO(EntityType.ARMADILLO),
+        NAUTILUS(EntityType.NAUTILUS),
+        ZOMBIE_NAUTILUS(EntityType.ZOMBIE_NAUTILUS),
+        SNIFFER(EntityType.SNIFFER),
+        CAMEL(EntityType.CAMEL),
+        GOAT(EntityType.GOAT),
+        PANDA(EntityType.PANDA),
+        SLIME(EntityType.SLIME);
 
         final EntityType entityType;
 
@@ -93,7 +111,17 @@ final class CosmeticKinds {
         }
 
         boolean baby() {
-            return this == FOX || this == RABBIT || this == COW || this == POLAR_BEAR || this == VILLAGER;
+            return this == FOX || this == COW || this == POLAR_BEAR || this == VILLAGER;
+        }
+
+        /** 頭に乗せたとき大きすぎるものだけ、バニラの scale 属性で縮める。1.0 はそのまま。 */
+        double mountedScale() {
+            return switch (this) {
+                case SNIFFER, CAMEL -> 0.35;
+                case PANDA -> 0.45;
+                case SLIME -> 0.55;
+                default -> 1.0;
+            };
         }
 
         static MountKind parse(String raw) {

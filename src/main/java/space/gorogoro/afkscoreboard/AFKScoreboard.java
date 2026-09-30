@@ -110,13 +110,13 @@ public class AFKScoreboard extends JavaPlugin implements Listener {
         // 週間累計の保存（60秒ごと）。書き込み自体は専用スレッド
         Bukkit.getScheduler().runTaskTimer(this, this.weeklyStore::requestSave, 1200L, 1200L);
 
-        // 見た目は別タスク。パーティクルは既定 10 秒、追従チェックは 1 秒。乗客なので座標の毎 tick 更新はしない
+        // 見た目は別タスク。パーティクルは既定 3 秒、追従チェックは 1 秒。乗客なので座標の毎 tick 更新はしない
         this.cosmetics = new CosmeticService(this);
         this.cosmetics.load();
         this.cosmetics.removeStrayEntities();
         long particleInterval = getConfig().getLong("particle-interval-ticks");
         if (particleInterval < 20L) {
-            particleInterval = 200L;
+            particleInterval = 60L;
         }
         Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::tickParticles, particleInterval, particleInterval);
         Bukkit.getScheduler().runTaskTimer(this, this.cosmetics::maintain, 20L, 20L);
