@@ -111,7 +111,7 @@ final class CosmeticKinds {
         SHEEP(EntityType.SHEEP),
         PANDA(EntityType.PANDA),
         SLIME(EntityType.SLIME),
-        // 通常枠には入れない。random() で約 1%
+        // レア枠。random() で 1％の確率で抽選する
         CREEPER(EntityType.CREEPER);
 
         final EntityType entityType;
@@ -160,7 +160,7 @@ final class CosmeticKinds {
 
         static MountKind random() {
             ThreadLocalRandom random = ThreadLocalRandom.current();
-            // クリーパーだけ約 1%。ほかは均等
+            // クリーパーはレア枠として 1％。ほかは均等
             if (random.nextInt(100) == 0) {
                 return CREEPER;
             }
