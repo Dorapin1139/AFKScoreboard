@@ -12,6 +12,7 @@ import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.MultipleFacing;
+import org.bukkit.block.data.type.HangingMoss;
 import org.bukkit.entity.Ageable;
 import org.bukkit.entity.Axolotl;
 import org.bukkit.entity.Bee;
@@ -277,7 +278,7 @@ final class CosmeticService implements Listener {
 
     /**
      * 3 tick に 1 回。何かに乗っている(GSit で座っているなど)人について、
-     * 足元のブロック(花びら、キノコの地面側)を座面の高さに上げ下げし、頭上の MOB の向きを合わせる。
+     * 足元のブロック(花びら、キノコと枯れ木の地面側)を座面の高さに上げ下げし、頭上の MOB の向きを合わせる。
      * 乗っている間は PlayerMoveEvent が来ないため。見るのは足元ブロックか頭上 MOB がある人だけ。
      */
     void tickSeated() {
@@ -505,6 +506,31 @@ final class CosmeticService implements Listener {
                     ground(0.05f, -1.76f, 0.28f, 0.42f),
                     ground(0.30f, -1.76f, 0.32f, 0.34f)
             };
+            // 枯れ木。肩・背中・脇と、足元に数本。上端は目より下
+            case DEAD_BUSH -> new Offset[] {
+                    new Offset(-0.32f, -0.90f, -0.02f, 0.42f),
+                    new Offset(-0.08f, -1.02f, 0.18f, 0.44f),
+                    new Offset(0.16f, -1.16f, -0.08f, 0.36f),
+                    ground(-0.36f, -1.76f, -0.16f, 0.48f),
+                    ground(0.10f, -1.76f, -0.40f, 0.44f),
+                    ground(-0.08f, -1.76f, 0.14f, 0.50f)
+            };
+            // ペールの垂れ苔。先端の十字を、胴の横・背中・肩・脚に垂らす
+            case PALE_HANGING_MOSS -> new Offset[] {
+                    sheet(-0.40f, -1.28f, -0.06f, 0.32f, 0.74f, 0.32f, 0f, 0f, 0f),
+                    sheet(0.16f, -1.18f, 0.02f, 0.28f, 0.64f, 0.28f, 0f, 0f, 0f),
+                    sheet(-0.12f, -1.08f, 0.20f, 0.36f, 0.58f, 0.28f, 0f, 0f, 0f),
+                    sheet(-0.30f, -0.80f, 0.00f, 0.26f, 0.34f, 0.26f, 0f, 0f, 0f),
+                    sheet(0.12f, -1.62f, 0.04f, 0.24f, 0.46f, 0.22f, 0f, 0f, 0f)
+            };
+            // ペールオークの葉。開花したツツジの葉と同じ位置
+            case PALE_OAK_LEAVES -> new Offset[] {
+                    new Offset(-0.34f, -0.82f, -0.02f, 0.36f),
+                    new Offset(0.06f, -0.78f, 0.12f, 0.32f),
+                    new Offset(-0.12f, -0.98f, 0.20f, 0.34f),
+                    new Offset(-0.30f, -1.22f, -0.10f, 0.28f),
+                    new Offset(0.22f, -1.05f, -0.16f, 0.26f)
+            };
         };
         World world = player.getWorld();
         // 向きを 0 にして出す。プレイヤーの向きを引き継ぐと、ずらし(translation)ごと回転して足元から外れる
@@ -558,6 +584,10 @@ final class CosmeticService implements Listener {
             for (BlockFace face : faces) {
                 facing.setFace(face, true);
             }
+        }
+        if (data instanceof HangingMoss moss) {
+            // 途中の節ではなく先端の房。垂れた見た目になる
+            moss.setTip(true);
         }
         return data;
     }

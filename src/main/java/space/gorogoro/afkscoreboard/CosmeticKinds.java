@@ -52,7 +52,10 @@ final class CosmeticKinds {
         MOSS_BLOCK(Material.MOSS_BLOCK),
         VINE(Material.VINE),
         BROWN_MUSHROOM(Material.BROWN_MUSHROOM),
-        RED_MUSHROOM(Material.RED_MUSHROOM);
+        RED_MUSHROOM(Material.RED_MUSHROOM),
+        DEAD_BUSH(Material.DEAD_BUSH),
+        PALE_HANGING_MOSS(Material.PALE_HANGING_MOSS),
+        PALE_OAK_LEAVES(Material.PALE_OAK_LEAVES);
 
         final Material material;
 
