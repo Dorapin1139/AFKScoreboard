@@ -107,8 +107,12 @@ final class CosmeticKinds {
         SNIFFER(EntityType.SNIFFER),
         CAMEL(EntityType.CAMEL),
         GOAT(EntityType.GOAT),
+        PIG(EntityType.PIG),
+        SHEEP(EntityType.SHEEP),
         PANDA(EntityType.PANDA),
-        SLIME(EntityType.SLIME);
+        SLIME(EntityType.SLIME),
+        // 通常枠には入れない。random() で約 1%
+        CREEPER(EntityType.CREEPER);
 
         final EntityType entityType;
 
@@ -118,13 +122,15 @@ final class CosmeticKinds {
 
         boolean baby() {
             return this == FOX || this == COW || this == POLAR_BEAR || this == VILLAGER
-                    || this == MOOSHROOM || this == GOAT;
+                    || this == MOOSHROOM || this == GOAT || this == PIG || this == SHEEP;
         }
 
         /** 頭に乗せたとき大きすぎるものだけ、バニラの scale 属性で縮める。1.0 はそのまま。 */
         double mountedScale() {
             return switch (this) {
                 case SNIFFER, CAMEL -> 0.35;
+                // 身長 1.7 を、頭に乗るくらい（約 0.7）まで。爆発は別で止める
+                case CREEPER -> 0.4;
                 case PANDA -> 0.45;
                 // 甲羅の幅 1.2 を、頭の幅くらい（約 0.6）まで
                 case TURTLE -> 0.5;
@@ -153,8 +159,18 @@ final class CosmeticKinds {
         }
 
         static MountKind random() {
-            List<MountKind> pool = new ArrayList<>(List.of(values()));
-            return pool.get(ThreadLocalRandom.current().nextInt(pool.size()));
+            ThreadLocalRandom random = ThreadLocalRandom.current();
+            // クリーパーだけ約 1%。ほかは均等
+            if (random.nextInt(100) == 0) {
+                return CREEPER;
+            }
+            List<MountKind> pool = new ArrayList<>();
+            for (MountKind kind : values()) {
+                if (kind != CREEPER) {
+                    pool.add(kind);
+                }
+            }
+            return pool.get(random.nextInt(pool.size()));
         }
     }
 }

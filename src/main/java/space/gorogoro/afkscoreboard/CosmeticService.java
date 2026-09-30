@@ -1,6 +1,7 @@
 package space.gorogoro.afkscoreboard;
 
 import org.bukkit.Bukkit;
+import org.bukkit.DyeColor;
 import org.bukkit.Keyed;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -21,6 +22,7 @@ import org.bukkit.entity.Camel;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Chicken;
 import org.bukkit.entity.Cow;
+import org.bukkit.entity.Creeper;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Fox;
@@ -31,11 +33,13 @@ import org.bukkit.entity.Mob;
 import org.bukkit.entity.MushroomCow;
 import org.bukkit.entity.Panda;
 import org.bukkit.entity.Parrot;
+import org.bukkit.entity.Pig;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.PolarBear;
 import org.bukkit.entity.PufferFish;
 import org.bukkit.entity.Rabbit;
 import org.bukkit.entity.Salmon;
+import org.bukkit.entity.Sheep;
 import org.bukkit.entity.Sittable;
 import org.bukkit.entity.Slime;
 import org.bukkit.entity.Sniffer;
@@ -47,9 +51,12 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.CreeperPowerEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDismountEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.EntityMountEvent;
+import org.bukkit.event.entity.ExplosionPrimeEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerBucketEntityEvent;
@@ -642,6 +649,15 @@ final class CosmeticService implements Listener {
             // サイズ 2 を縮めて、頭に乗るくらいの中くらいにする
             slime.setSize(2);
         }
+        if (entity instanceof Pig pig) {
+            pig.setSaddle(false);
+        }
+        if (entity instanceof Creeper creeper) {
+            // 右クリックとダメージは別で止めている。半径 0 と着火解除で、漏れても壊さない
+            creeper.setPowered(false);
+            creeper.setIgnited(false);
+            creeper.setExplosionRadius(0);
+        }
         if (entity instanceof LivingEntity livingScaled) {
             double scale = kind.mountedScale();
             if (scale != 1.0) {
@@ -749,6 +765,17 @@ final class CosmeticService implements Listener {
                     nautilus.setVariant(variant);
                 }
             });
+            case PIG -> applyRegistry(Pig.Variant.class, stored, variant -> {
+                if (entity instanceof Pig pig) {
+                    pig.setVariant(variant);
+                }
+            });
+            case SHEEP -> {
+                if (entity instanceof Sheep sheep) {
+                    sheep.setColor(pickEnum(DyeColor.class, stored));
+                    sheep.setSheared(false);
+                }
+            }
             case GOAT -> {
                 if (entity instanceof Goat goat) {
                     boolean screaming = stored == null || stored.isBlank()
@@ -772,7 +799,7 @@ final class CosmeticService implements Listener {
                     panda.setOnBack(false);
                 }
             }
-            case PUFFERFISH, PUFFERFISH_HALF, BEE, POLAR_BEAR, TURTLE, COD, SQUID, GLOW_SQUID, ARMADILLO, NAUTILUS, SNIFFER, CAMEL, SLIME -> {
+            case PUFFERFISH, PUFFERFISH_HALF, BEE, POLAR_BEAR, TURTLE, COD, SQUID, GLOW_SQUID, ARMADILLO, NAUTILUS, SNIFFER, CAMEL, SLIME, CREEPER -> {
             }
         }
     }
@@ -822,6 +849,12 @@ final class CosmeticService implements Listener {
         }
         if (entity instanceof Goat goat) {
             return goat.isScreaming() ? "SCREAMING" : "NORMAL";
+        }
+        if (entity instanceof Pig pig) {
+            return keyOf(pig.getVariant());
+        }
+        if (entity instanceof Sheep sheep && sheep.getColor() != null) {
+            return sheep.getColor().name();
         }
         if (entity instanceof Panda panda && panda.getMainGene() != null && panda.getHiddenGene() != null) {
             return panda.getMainGene().name() + "/" + panda.getHiddenGene().name();
@@ -1053,6 +1086,27 @@ final class CosmeticService implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onShear(PlayerShearEntityEvent event) {
+        if (isOurs(event.getEntity())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onPrime(ExplosionPrimeEvent event) {
+        if (isOurs(event.getEntity())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onExplode(EntityExplodeEvent event) {
+        if (event.getEntity() != null && isOurs(event.getEntity())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onCreeperPower(CreeperPowerEvent event) {
         if (isOurs(event.getEntity())) {
             event.setCancelled(true);
         }
