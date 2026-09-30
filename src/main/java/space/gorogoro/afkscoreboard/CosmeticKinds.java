@@ -117,7 +117,8 @@ final class CosmeticKinds {
         }
 
         boolean baby() {
-            return this == FOX || this == COW || this == POLAR_BEAR || this == VILLAGER;
+            return this == FOX || this == COW || this == POLAR_BEAR || this == VILLAGER
+                    || this == MOOSHROOM || this == GOAT;
         }
 
         /** 頭に乗せたとき大きすぎるものだけ、バニラの scale 属性で縮める。1.0 はそのまま。 */
@@ -125,7 +126,15 @@ final class CosmeticKinds {
             return switch (this) {
                 case SNIFFER, CAMEL -> 0.35;
                 case PANDA -> 0.45;
+                // 甲羅の幅 1.2 を、頭の幅くらい（約 0.6）まで
+                case TURTLE -> 0.5;
                 case SLIME -> 0.55;
+                // 高さ 0.95・幅 0.875 を、約 0.6 まで。ゾンビも同じ
+                case NAUTILUS, ZOMBIE_NAUTILUS -> 0.65;
+                // 当たり 0.8 に触手が足るので、胴が頭に収まるくらい
+                case SQUID, GLOW_SQUID -> 0.7;
+                // 座っても胴が長い。高さ 0.85 を約 0.64 まで
+                case WOLF -> 0.75;
                 // 最大膨張はトゲ込みで頭より大きいので少しだけ縮める。半膨張は 1.0
                 case PUFFERFISH -> 0.8;
                 default -> 1.0;
