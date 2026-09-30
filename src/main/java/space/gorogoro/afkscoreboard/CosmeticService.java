@@ -605,8 +605,8 @@ final class CosmeticService implements Listener {
             ageable.setAgeLock(true);
         }
         if (entity instanceof PufferFish puffer) {
-            // 0 が通常、1 が半膨張、2 が最大
-            puffer.setPuffState(2);
+            // 0 が通常、1 が半膨張、2 が最大。半膨張は別枠で、サイズはそのまま
+            puffer.setPuffState(kind == CosmeticKinds.MountKind.PUFFERFISH_HALF ? 1 : 2);
         }
         if (entity instanceof Slime slime) {
             // サイズ 2 を縮めて、頭に乗るくらいの中くらいにする
@@ -742,7 +742,7 @@ final class CosmeticService implements Listener {
                     panda.setOnBack(false);
                 }
             }
-            case PUFFERFISH, BEE, POLAR_BEAR, TURTLE, COD, SQUID, GLOW_SQUID, ARMADILLO, NAUTILUS, SNIFFER, CAMEL, SLIME -> {
+            case PUFFERFISH, PUFFERFISH_HALF, BEE, POLAR_BEAR, TURTLE, COD, SQUID, GLOW_SQUID, ARMADILLO, NAUTILUS, SNIFFER, CAMEL, SLIME -> {
             }
         }
     }

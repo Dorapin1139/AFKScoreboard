@@ -81,6 +81,7 @@ final class CosmeticKinds {
         CAT(EntityType.CAT),
         FROG(EntityType.FROG),
         PUFFERFISH(EntityType.PUFFERFISH),
+        PUFFERFISH_HALF(EntityType.PUFFERFISH),
         CHICKEN(EntityType.CHICKEN),
         RABBIT(EntityType.RABBIT),
         FOX(EntityType.FOX),
@@ -122,6 +123,8 @@ final class CosmeticKinds {
                 case SNIFFER, CAMEL -> 0.35;
                 case PANDA -> 0.45;
                 case SLIME -> 0.55;
+                // 最大膨張はトゲ込みで頭より大きいので少しだけ縮める。半膨張は 1.0
+                case PUFFERFISH -> 0.8;
                 default -> 1.0;
             };
         }
