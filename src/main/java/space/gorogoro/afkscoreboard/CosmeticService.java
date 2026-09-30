@@ -277,13 +277,13 @@ final class CosmeticService implements Listener {
 
     /**
      * 3 tick に 1 回。何かに乗っている(GSit で座っているなど)人について、
-     * 足元のブロック(花びら)を座面の高さに上げ下げし、頭上の MOB の向きを合わせる。
+     * 足元のブロック(花びら、キノコの地面側)を座面の高さに上げ下げし、頭上の MOB の向きを合わせる。
      * 乗っている間は PlayerMoveEvent が来ないため。見るのは足元ブロックか頭上 MOB がある人だけ。
      */
     void tickSeated() {
         for (Map.Entry<UUID, Active> entry : active.entrySet()) {
             Active state = entry.getValue();
-            boolean hasFloor = isFloor(state.block) && !state.displays.isEmpty();
+            boolean hasFloor = !state.floorDisplays.isEmpty();
             boolean hasRider = state.rider != null && state.rider.isValid();
             if (!hasFloor && !hasRider) {
                 continue;
@@ -455,9 +455,9 @@ final class CosmeticService implements Listener {
             };
             // 散らばり方はそのまま、全体の範囲(x -0.495〜0.495、z -0.515〜0.515)の中心をプレイヤーの真下にする
             case PETALS -> new Offset[] {
-                    new Offset(-0.495f, -1.76f, -0.155f, 0.5f),
-                    new Offset(0.045f, -1.76f, -0.515f, 0.45f),
-                    new Offset(-0.155f, -1.76f, 0.065f, 0.45f)
+                    ground(-0.495f, -1.76f, -0.155f, 0.5f),
+                    ground(0.045f, -1.76f, -0.515f, 0.45f),
+                    ground(-0.155f, -1.76f, 0.065f, 0.45f)
             };
             // 肩・背中・脚に薄く生えた苔。カーペットは底面だけなので、角の高さが見た目の高さ
             case MOSS -> new Offset[] {
@@ -482,6 +482,28 @@ final class CosmeticService implements Listener {
                     sheet(-0.10f, -1.18f, -0.38f, 0.32f, 0.40f, 0.06f, 0f, -12f, 0f, BlockFace.NORTH, BlockFace.SOUTH),
                     sheet(-0.34f, -0.68f, 0.02f, 0.10f, 0.35f, 0.28f, 0f, 0f, 25f, BlockFace.WEST, BlockFace.EAST),
                     sheet(0.18f, -1.62f, 0.05f, 0.06f, 0.45f, 0.18f, 0f, 0f, 0f, BlockFace.EAST, BlockFace.WEST)
+            };
+            // ポーション材料の小さい茶キノコ。体からと、足元に複数本
+            case BROWN_MUSHROOM -> new Offset[] {
+                    new Offset(-0.30f, -0.82f, -0.02f, 0.32f),
+                    new Offset(-0.06f, -0.96f, 0.18f, 0.34f),
+                    new Offset(0.16f, -1.08f, -0.12f, 0.28f),
+                    ground(-0.42f, -1.76f, -0.22f, 0.42f),
+                    ground(0.08f, -1.76f, -0.48f, 0.38f),
+                    ground(-0.18f, -1.76f, 0.12f, 0.46f),
+                    ground(0.32f, -1.76f, 0.02f, 0.36f),
+                    ground(-0.05f, -1.76f, -0.08f, 0.32f)
+            };
+            // ポーション材料の小さい赤キノコ。配置は茶とずらす
+            case RED_MUSHROOM -> new Offset[] {
+                    new Offset(0.08f, -0.76f, 0.04f, 0.30f),
+                    new Offset(-0.22f, -0.90f, 0.16f, 0.32f),
+                    new Offset(-0.28f, -1.14f, -0.08f, 0.28f),
+                    ground(-0.28f, -1.76f, -0.40f, 0.40f),
+                    ground(0.18f, -1.76f, -0.12f, 0.44f),
+                    ground(-0.48f, -1.76f, 0.08f, 0.36f),
+                    ground(0.05f, -1.76f, 0.28f, 0.42f),
+                    ground(0.30f, -1.76f, 0.32f, 0.34f)
             };
         };
         World world = player.getWorld();
@@ -514,13 +536,20 @@ final class CosmeticService implements Listener {
             });
             player.addPassenger(display);
             state.displays.add(display);
+            if (offset.floor()) {
+                state.floorDisplays.add(display);
+            }
         }
+    }
+
+    private static Offset ground(float x, float y, float z, float scale) {
+        return new Offset(x, y, z, scale, scale, scale, 0f, 0f, 0f, null, true);
     }
 
     private static Offset sheet(float x, float y, float z, float sx, float sy, float sz,
             float pitch, float yaw, float roll, BlockFace... faces) {
         BlockFace[] stored = faces == null || faces.length == 0 ? null : faces;
-        return new Offset(x, y, z, sx, sy, sz, pitch, yaw, roll, stored);
+        return new Offset(x, y, z, sx, sy, sz, pitch, yaw, roll, stored, false);
     }
 
     private static BlockData blockData(CosmeticKinds.BlockKind kind, BlockFace[] faces) {
@@ -857,16 +886,13 @@ final class CosmeticService implements Listener {
             allowDismount = outer;
         }
         state.displays.clear();
+        state.floorDisplays.clear();
         // 出し直すと元の高さに戻るので、座っていれば次の 3 tick で上げ直す
         state.floorLifted = false;
     }
 
-    private static boolean isFloor(CosmeticKinds.BlockKind kind) {
-        return kind == CosmeticKinds.BlockKind.PETALS;
-    }
-
     private void liftDisplays(Active state, float dy) {
-        for (BlockDisplay display : state.displays) {
+        for (BlockDisplay display : state.floorDisplays) {
             if (display == null || !display.isValid()) {
                 continue;
             }
@@ -1035,6 +1061,8 @@ final class CosmeticService implements Listener {
         private CosmeticKinds.BlockKind block;
         private CosmeticKinds.MountKind mount;
         private final List<BlockDisplay> displays = new ArrayList<>();
+        // 座っている間だけ上げる足元側。体から生えている分は含めない
+        private final List<BlockDisplay> floorDisplays = new ArrayList<>();
         private LivingEntity rider;
         // ブロックだけが乗っている間に出す、ネームタグの代わりの名前
         private TextDisplay nameTag;
@@ -1043,9 +1071,9 @@ final class CosmeticService implements Listener {
     }
 
     private record Offset(float x, float y, float z, float sx, float sy, float sz,
-            float pitch, float yaw, float roll, BlockFace[] faces) {
+            float pitch, float yaw, float roll, BlockFace[] faces, boolean floor) {
         private Offset(float x, float y, float z, float scale) {
-            this(x, y, z, scale, scale, scale, 0f, 0f, 0f, null);
+            this(x, y, z, scale, scale, scale, 0f, 0f, 0f, null, false);
         }
     }
 

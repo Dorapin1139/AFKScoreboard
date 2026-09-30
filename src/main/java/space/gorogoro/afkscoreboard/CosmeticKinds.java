@@ -50,7 +50,9 @@ final class CosmeticKinds {
         PETALS(Material.PINK_PETALS),
         MOSS(Material.MOSS_CARPET),
         MOSS_BLOCK(Material.MOSS_BLOCK),
-        VINE(Material.VINE);
+        VINE(Material.VINE),
+        BROWN_MUSHROOM(Material.BROWN_MUSHROOM),
+        RED_MUSHROOM(Material.RED_MUSHROOM);
 
         final Material material;
 
