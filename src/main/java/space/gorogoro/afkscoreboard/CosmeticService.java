@@ -280,7 +280,19 @@ final class CosmeticService implements Listener {
         if (state == null || state.rider == null || !state.rider.isValid()) {
             return;
         }
-        state.rider.setRotation(to.getYaw(), to.getPitch());
+        faceMount(state.rider, to.getYaw(), to.getPitch());
+    }
+
+    /**
+     * 頭上の MOB をプレイヤーの向きに合わせる。位置は動かさない。
+     * ヤギは setYHeadRot が体から ±15° までしか頭を許さない。体を先に同じヨーにしないと、
+     * 頭の回転がそこまでしか届かず、立ち止まって振り向いたとき体が止まったままになる。
+     */
+    private static void faceMount(LivingEntity living, float yaw, float pitch) {
+        if (living instanceof Goat) {
+            living.setBodyYaw(yaw);
+        }
+        living.setRotation(yaw, pitch);
     }
 
     /**
@@ -314,7 +326,7 @@ final class CosmeticService implements Listener {
             if (look.getYaw() == current.getYaw() && look.getPitch() == current.getPitch()) {
                 continue;
             }
-            state.rider.setRotation(look.getYaw(), look.getPitch());
+            faceMount(state.rider, look.getYaw(), look.getPitch());
         }
     }
 
@@ -610,6 +622,8 @@ final class CosmeticService implements Listener {
             return null;
         }
         living.setSilent(true);
+        Location look = player.getLocation();
+        faceMount(living, look.getYaw(), look.getPitch());
         player.addPassenger(living);
         return living;
     }
